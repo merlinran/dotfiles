@@ -1,0 +1,12 @@
+gitignore: false
+vim: true
+check-update: false
+show-release-notes: false
+notifications: true
+# architect: true
+cache-prompts: true
+vim: true
+model: deepseek
+  # model: r1
+  # model: sonnet
+  # editor-model: sonnet
