@@ -28,6 +28,7 @@
 	# Clone a repository including all submodules.
 	c = clone --recursive
 
+	ci = commit
 	# Commit all changes.
 	ca = !git add ':(exclude,attr:builtin_objectmode=160000)' && git commit -av
 
@@ -128,3 +129,9 @@
 [url "git://gist.github.com/"]
 
 	insteadOf = "gist:"
+
+[filter "lfs"]
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
+	clean = git-lfs clean -- %f

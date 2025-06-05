@@ -1,37 +1,54 @@
 cask_args appdir: '/Applications'
 
-tap 'homebrew/bundle'
-
-brew 'cloudflared'
-brew 'imagemagick'
-brew 'postgresql@14'
-brew 'redis'
-brew 'ruby-build'
-brew 'spaceman-diff'
-brew 'spark'
-brew 'stripe/stripe-cli/stripe'
-brew 'stripe/stripe-mock/stripe-mock'
+brew 'coreutils'
+brew 'direnv'
+brew 'findutils'
+brew 'fswatch'
+brew 'git'
+brew 'gnu-sed'
+brew 'grep'
+brew 'make'
+brew 'pstree'
+brew 'rg'
+brew 'scc'
+brew 'tree'
 brew 'wget'
 brew 'yt-dlp'
 
 cask '1password'
-cask 'airtable'
-cask 'android-platform-tools'
-cask 'arq'
-cask 'diffusionbee'
-cask 'handbrake'
-cask 'messenger'
-cask 'notion-calendar'
-cask 'plex'
-cask 'qlvideo'
-cask 'sonos'
-cask 'steam'
-cask 'transmission'
-cask 'raycast'
-cask 'warp'
-cask 'whatsapp'
-cask 'windsurf'
+cask 'brave-browser'
+cask 'dash'
+cask 'dropbox'
+cask 'iterm2'
+cask 'macpass'
+cask 'notion'
+cask 'slack'
 cask 'visual-studio-code'
-cask 'vlc'
 cask 'zed'
 cask 'zoom'
+
+# AI
+brew 'aider'
+brew 'ollama'
+cask 'chatgpt'
+cask 'cursor'
+cask 'windsurf'
+
+# docker
+brew 'docker'
+brew 'docker-buildx' # TODO: symlink ~/.docker/config.json with the caveat from `brew info docker-buildx`
+brew 'docker-compose'
+brew 'colima' # Docker Desktop replacement
+
+# Frontend
+brew 'npm'
+
+# Android development
+brew 'gradle'
+cask 'android-platform-tools'
+cask 'android-studio'
+
+# PostgreSQL
+cask 'dbeaver-community'
+
+

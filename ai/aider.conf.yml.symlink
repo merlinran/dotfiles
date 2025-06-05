@@ -6,7 +6,11 @@ notifications: true
 # architect: true
 cache-prompts: true
 vim: true
-model: deepseek
+# ollama-api-base: http://localhost:11434/v1
+# model: ollama/deepseek-coder:6.7b-instruct
+# model: ollama/codellama:13b-instruct
+# model: ollama/codellama-13b-16k
+  # model: deepseek
   # model: r1
   # model: sonnet
   # editor-model: sonnet

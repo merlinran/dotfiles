@@ -1,0 +1,11 @@
+{
+    "codellama-13b-16k": {
+        "max_tokens": 16384,
+        "max_input_tokens": 32000,
+        "max_output_tokens": 16384,
+        "input_cost_per_token": 0,
+        "output_cost_per_token": 0,
+        "litellm_provider": "ollama/codellama-13b-16k",
+        "mode": "chat"
+    }
+}
