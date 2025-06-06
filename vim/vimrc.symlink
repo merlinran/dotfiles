@@ -23,6 +23,15 @@ map <C-L> <C-W>l<C-W>_
 let mapleader = ","
 nnoremap <leader>a :cclose<CR>
 
+call plug#begin()
+Plug 'junegunn/fzf.vim'
+Plug 'tpope/vim-fugitive'
+Plug 'dense-analysis/ale'
+Plug 'ctrlpvim/ctrlp.vim'
+Plug 'sheerun/vim-polyglot'
+call plug#end()
+
+
 function! GitBranch()
   return system("git rev-parse --abbrev-ref HEAD 2>/dev/null | tr -d '\n'")
 endfunction
@@ -62,15 +71,6 @@ set statusline+=\ %l:%c
 set statusline+=\ 
 set statusline+=\ %{LinterStatus()}
 set statusline+=\ 
-
-
-call plug#begin()
-Plug 'junegunn/fzf.vim'
-Plug 'tpope/vim-fugitive'
-Plug 'dense-analysis/ale'
-Plug 'ctrlpvim/ctrlp.vim'
-Plug 'sheerun/vim-polyglot'
-call plug#end()
 
 
 autocmd BufReadPost *.sqm set syntax=sql
