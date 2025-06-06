@@ -1,6 +1,131 @@
 syntax on
+set clipboard=unnamed
+set winheight=999
+" set textwidth=120
+set expandtab
+set number
+set shiftwidth=2
+set softtabstop=2
+set wildmode=longest,list
+set autowrite
+set wrap
+set nowritebackup " to avoid conflict with pytest-watch
+filetype plugin indent on
 
-" Wrap gitcommit file types at the appropriate length
-filetype indent plugin on
+map <C-J> <C-W>j<C-W>_
+map <C-K> <C-W>k<C-W>_
+map <C-H> <C-W>h<C-W>_
+map <C-L> <C-W>l<C-W>_
 
-set clipboard+=unnamed
+" map <C-n> :cnext<CR>
+" map <C-m> :cprevious<CR>
+"
+let mapleader = ","
+nnoremap <leader>a :cclose<CR>
+
+function! GitBranch()
+  return system("git rev-parse --abbrev-ref HEAD 2>/dev/null | tr -d '\n'")
+endfunction
+
+function! StatuslineGit()
+  let l:branchname = GitBranch()
+  return strlen(l:branchname) > 0?'  '.l:branchname.' ':''
+endfunction
+
+function! LinterStatus() abort
+  let l:counts = ale#statusline#Count(bufnr(''))
+
+  let l:all_errors = l:counts.error + l:counts.style_error
+  let l:all_non_errors = l:counts.total - l:all_errors
+
+  return l:counts.total == 0 ? '✨ all good ✨' : printf(
+        \   '😞 %dW %dE',
+        \   all_non_errors,
+        \   all_errors
+        \)
+endfunction
+
+set laststatus=2
+set statusline=
+set statusline+=%#PmenuSel#
+" set statusline+=%{StatuslineGit()} disabled to fix https://github.com/fatih/vim-go/issues/71#issuecomment-394808485
+set statusline+=%#LineNr#
+set statusline+=\ %F
+set statusline+=%m
+set statusline+=%r
+set statusline+=%=
+set statusline+=%#CursorColumn#
+set statusline+=\ %y
+set statusline+=\[%{&fileformat}\]
+set statusline+=\ %p%%
+set statusline+=\ %l:%c
+set statusline+=\ 
+set statusline+=\ %{LinterStatus()}
+set statusline+=\ 
+
+autocmd BufReadPost *.sqm set syntax=sql
+autocmd BufReadPost *.sq set syntax=sql
+
+autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab
+
+" autocmd FileType python set foldmethod=indent foldnestmax=4 foldminlines=30
+autocmd FileType python nnoremap <space> za
+autocmd FileType python vnoremap <space> zf
+autocmd FileType python nmap <leader>k <Plug>(ale_previous_wrap)
+autocmd FileType python nmap <leader>j <Plug>(ale_next_wrap)
+
+autocmd BufWritePre *.go GoFmt
+autocmd FileType go nmap <leader>b  <Plug>(go-build)
+autocmd FileType go nmap <leader>r  <Plug>(go-referrers)
+autocmd FileType go nmap <leader>t  <Plug>(go-test)
+autocmd FileType go nmap <leader>f  <Plug>(go-decls-dir)
+autocmd FileType go nmap <leader>c  <Plug>(go-channel-peers)
+autocmd FileType go nmap <leader>k <Plug>(ale_previous_wrap)
+autocmd FileType go nmap <leader>j <Plug>(ale_next_wrap)
+autocmd Filetype go command! -bang A call go#alternate#Switch(<bang>0, 'edit')
+autocmd Filetype go command! -bang AV call go#alternate#Switch(<bang>0, 'vsplit')
+autocmd Filetype go command! -bang AS call go#alternate#Switch(<bang>0, 'split')
+autocmd Filetype go command! -bang AT call go#alternate#Switch(<bang>0, 'tabe')
+autocmd Filetype go inoremap <buffer> . .<C-x><C-o>
+autocmd Filetype go setlocal shiftwidth=4 softtabstop=4 tabstop=4 expandtab
+autocmd Filetype tex set formatoptions+=a
+let g:go_metalinter_enabled = ['vet', 'errcheck']
+let g:go_metalinter_autosave = 0
+let g:go_metalinter_autosave_enabled = ['vet', 'errcheck']
+let g:go_fmt_command = "goimports"
+set updatetime=100
+let g:go_auto_type_info = 1
+let g:go_build_tags = 'windows,linux,unittest'
+packloadall
+
+let g:rustfmt_autosave = 1
+augroup filetype_rust                                                                                                                                                        
+    au!                                                                                                                                              
+    au BufRead,BufNewFile *.rs nnoremap K :ALEHover<CR>                                                                               
+    au BufRead,BufNewFile *.rs nnoremap <C-]> :ALEGoToDefinition<CR>                                                                            
+augroup END
+
+let g:ale_linters = {
+      \   'python': ['ruff', 'black'],
+      \   'ruby': ['standardrb', 'rubocop'],
+      \   'javascript': ['eslint'],
+      \   'sql': [],
+      \   'go': ['gometalinter', 'gofmt', 'staticcheck', 'gosimple'],
+      \   'rust': ['analyzer'],
+      \}
+
+let g:ale_go_gometalinter_options = '--fast'
+let g:ale_yaml_yamllint_options = '-d "{extends: relaxed, rules: {line-length: {max: 120}}}"'
+let g:ale_go_golangci_lint_options = '--disable typecheck'
+
+nmap <F10> :ALEFix<CR>
+let g:ale_fix_on_save = 1
+map <C-]> <leader>g
+
+let g:gutentags_enabled = 0
+let g:gutentags_ctags_auto_generate = 1
+let g:gutentags_project_root = ['.git', '.hg', '.svn', 'Makefile', 'package.json']
+let g:gutentags_ctags_tagfile = '.tags'
+let g:gutentags_generate_on_write = 1
+let g:jedi#force_py_version = 3
+let g:python3_host_prog = '/opt/homebrew/bin/python3'

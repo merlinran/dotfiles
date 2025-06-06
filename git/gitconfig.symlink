@@ -1,9 +1,15 @@
 # Local/private config goes in the include
 [include]
         path = ~/.gitconfig.local
+[commit]
+	gpgsign = true
+[gpg]
+	program = gpg
 [hub]
         protocol = https
 [alias]
+        ci = commit -S
+        h = log --no-merges --pretty='format:%C(dim green) %<(9,trunc)%ar %C(bold magenta)%h %C(bold green)%<(12,trunc)%an %C(bold yellow)%<(113,trunc)%s'
         co = checkout
         promote = !$ZSH/bin/git-promote
         wtf     = !$ZSH/bin/git-wtf
@@ -100,6 +106,7 @@
         default = simple
 	# Make `git push` push relevant annotated tags when pushing branches out.
 	followTags = true
+	autoSetupRemote = true
 
 [credential]
 	helper = osxkeychain
@@ -109,25 +116,22 @@
 
 [pull]
 	rebase = true
+	ff = only
 
 [url "git@github.com:"]
-
 	insteadOf = "gh:"
 	pushInsteadOf = "github:"
 	pushInsteadOf = "git://github.com/"
 
 [url "git://github.com/"]
-
 	insteadOf = "github:"
 
 [url "git@gist.github.com:"]
-
 	insteadOf = "gst:"
 	pushInsteadOf = "gist:"
 	pushInsteadOf = "git://gist.github.com/"
 
 [url "git://gist.github.com/"]
-
 	insteadOf = "gist:"
 
 [filter "lfs"]
@@ -135,3 +139,7 @@
 	process = git-lfs filter-process
 	required = true
 	clean = git-lfs clean -- %f
+[rerere]
+	enabled = true
+[advice]
+	addIgnoredFile = false
