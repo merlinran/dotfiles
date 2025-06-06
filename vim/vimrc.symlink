@@ -63,6 +63,16 @@ set statusline+=\
 set statusline+=\ %{LinterStatus()}
 set statusline+=\ 
 
+
+call plug#begin()
+Plug 'junegunn/fzf.vim'
+Plug 'tpope/vim-fugitive'
+Plug 'dense-analysis/ale'
+Plug 'ctrlpvim/ctrlp.vim'
+Plug 'sheerun/vim-polyglot'
+call plug#end()
+
+
 autocmd BufReadPost *.sqm set syntax=sql
 autocmd BufReadPost *.sq set syntax=sql
 
@@ -121,11 +131,3 @@ let g:ale_go_golangci_lint_options = '--disable typecheck'
 nmap <F10> :ALEFix<CR>
 let g:ale_fix_on_save = 1
 map <C-]> <leader>g
-
-let g:gutentags_enabled = 0
-let g:gutentags_ctags_auto_generate = 1
-let g:gutentags_project_root = ['.git', '.hg', '.svn', 'Makefile', 'package.json']
-let g:gutentags_ctags_tagfile = '.tags'
-let g:gutentags_generate_on_write = 1
-let g:jedi#force_py_version = 3
-let g:python3_host_prog = '/opt/homebrew/bin/python3'
