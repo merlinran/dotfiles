@@ -27,12 +27,15 @@ cask 'visual-studio-code'
 cask 'zed'
 cask 'zoom'
 
+# Python
+brew 'pyright'
+brew 'pipx' # to install pips globally
+
 # AI
 brew 'aider'
 brew 'ollama'
 cask 'chatgpt'
 cask 'cursor'
-cask 'windsurf'
 
 # docker
 brew 'docker'

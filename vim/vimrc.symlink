@@ -1,6 +1,10 @@
 syntax on
 set clipboard=unnamed
 set winheight=999
+" set winminheight=5
+" set previewheight=5
+" Ensure new horizontal splits (including preview) open at the bottom
+set splitbelow
 " set textwidth=120
 set expandtab
 set number
@@ -26,9 +30,11 @@ nnoremap <leader>a :cclose<CR>
 call plug#begin()
 Plug 'junegunn/fzf.vim'
 Plug 'tpope/vim-fugitive'
-Plug 'dense-analysis/ale'
+Plug 'dense-analysis/ale' " for linting, using mypy
+Plug 'neoclide/coc.nvim', {'branch': 'release'} " for code navigation, using pyright
 Plug 'ctrlpvim/ctrlp.vim'
 Plug 'sheerun/vim-polyglot'
+Plug 'fatih/vim-go'
 call plug#end()
 
 
@@ -116,7 +122,7 @@ augroup filetype_rust
 augroup END
 
 let g:ale_linters = {
-      \   'python': ['ruff', 'black'],
+      \   'python': ['ruff', 'mypy'],
       \   'ruby': ['standardrb', 'rubocop'],
       \   'javascript': ['eslint'],
       \   'sql': [],
@@ -127,7 +133,18 @@ let g:ale_linters = {
 let g:ale_go_gometalinter_options = '--fast'
 let g:ale_yaml_yamllint_options = '-d "{extends: relaxed, rules: {line-length: {max: 120}}}"'
 let g:ale_go_golangci_lint_options = '--disable typecheck'
+let g:ale_completion_enabled = 1
+let g:ale_set_highlights = 1
+let g:ale_cursor_detail = 1
+let g:ale_disable_lsp = 1
+let g:ale_python_mypy_auto_uv = 1
+let g:ale_python_mypy_options = '--config-file=pyproject.toml'
 
 nmap <F10> :ALEFix<CR>
 let g:ale_fix_on_save = 1
-map <C-]> <leader>g
+nmap <silent> <C-]> <Plug>(coc-definition)
+
+nmap <silent> gd <Plug>(coc-definition)
+nmap <silent> gr <Plug>(coc-references)
+nmap <silent> gi <Plug>(coc-implementation)
+nnoremap <silent> K :call CocAction('doHover')<CR>

@@ -5,7 +5,8 @@ show-release-notes: false
 notifications: true
 # architect: true
 cache-prompts: true
-vim: true
+attribute-author: false # to avoid breaking GPG signing
+attribute-committer: false # to avoid breaking GPG signing
 # ollama-api-base: http://localhost:11434/v1
 # model: ollama/deepseek-coder:6.7b-instruct
 # model: ollama/codellama:13b-instruct
