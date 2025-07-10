@@ -74,3 +74,5 @@ export NVM_DIR="$HOME/.nvm"
 
 bindkey -r '^D'
 unset IGNOREEOF
+
+eval "$(zoxide init zsh)"
