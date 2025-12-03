@@ -29,7 +29,7 @@
 	di = !"d() { git diff --patch-with-stat HEAD~$1; }; git diff-index --quiet HEAD -- || clear; d"
 
 	# Pull in remote changes for the current repository and all its submodules.
-	p = pull --recurse-submodules
+	p = pull --recurse-submodules -p
 
 	# Clone a repository including all submodules.
 	c = clone --recursive
@@ -43,6 +43,7 @@
 	# Show verbose output about tags, branches or remotes
 	tags = tag -l
 	branches = branch --all
+	b = for-each-ref --sort=-committerdate --format='%(committerdate:iso8601) %(refname:short)' refs/heads/
 	remotes = remote --verbose
 
 	# List aliases.
@@ -90,7 +91,9 @@
         excludesfile = ~/.gitignore
         editor = vim
 [apply]
-        whitespace = nowarn
+	whitespace = nowarn
+[merge]
+	guitool = meld
 [mergetool]
         keepBackup = false
 [difftool]

@@ -14,33 +14,36 @@ brew 'rg'
 brew 'scc'
 brew 'tree'
 brew 'wget'
-brew 'yazi'
-brew 'yt-dlp'
-brew 'zoxide'
+# brew 'yazi'
+# brew 'yt-dlp'
+# brew 'zoxide'
 
 cask '1password'
+cask '1password-cli'
 cask 'brave-browser'
 cask 'dash'
 cask 'dropbox'
 # cask 'iterm2'
-cask 'ghostty'
+# cask 'ghostty'
 cask 'macpass'
 cask 'notion'
-cask 'rustdesk'
+# cask 'rustdesk'
 cask 'slack'
-cask 'visual-studio-code'
+# cask 'visual-studio-code'
 cask 'zed'
 cask 'zoom'
+cask 'kdiff3'
 
 # Python
 brew 'pyright'
 brew 'pipx' # to install pips globally
 
 # AI
-brew 'aider'
-brew 'ollama'
+# brew 'aider'
+# brew 'ollama'
+cask 'codex'
 cask 'chatgpt'
-cask 'cursor'
+# cask 'cursor'
 
 # docker
 brew 'docker'
@@ -52,9 +55,9 @@ brew 'colima' # Docker Desktop replacement
 brew 'npm'
 
 # Android development
-brew 'gradle'
-cask 'android-platform-tools'
-cask 'android-studio'
+# brew 'gradle'
+# cask 'android-platform-tools'
+# cask 'android-studio'
 
 # PostgreSQL
 cask 'dbeaver-community'
