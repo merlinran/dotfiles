@@ -94,6 +94,7 @@
 	whitespace = nowarn
 [merge]
 	guitool = meld
+	conflictStyle = diff3
 [mergetool]
         keepBackup = false
 [difftool]
@@ -148,3 +149,8 @@
 	enabled = true
 [advice]
 	addIgnoredFile = false
+[user]
+	email = merlin@enveritas.org
+[merge "mergiraf"]
+	name = mergiraf
+	driver = mergiraf merge --git %O %A %B -s %S -x %X -y %Y -p %P -l %L
