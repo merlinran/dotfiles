@@ -1,0 +1,17 @@
+#!/bin/sh
+
+set -eu
+
+name=${1:?window name is required}
+path=${2:?path is required}
+
+if [ ! -d "$path" ]; then
+  tmux display-message "Missing repo: $path"
+  exit 1
+fi
+
+if tmux select-window -t ":$name" 2>/dev/null; then
+  exit 0
+fi
+
+exec tmux new-window -n "$name" -c "$path"

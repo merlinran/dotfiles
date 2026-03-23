@@ -1,0 +1,4 @@
+bind-key j run-shell "$HOME/.dotfiles/bin/tmux-repo-window jebena-api-server /Users/merlinran/enveritas/jebena-api-server/develop"
+bind-key p run-shell "$HOME/.dotfiles/bin/tmux-repo-window data-pipeline /Users/merlinran/enveritas/data-pipeline/master"
+bind-key e run-shell "$HOME/.dotfiles/bin/tmux-repo-window data-etl /Users/merlinran/enveritas/data-etl/master"
+bind-key s run-shell "$HOME/.dotfiles/bin/tmux-repo-window snowflake /Users/merlinran/enveritas/snowflake/main"

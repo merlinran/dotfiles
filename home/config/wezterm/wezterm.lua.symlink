@@ -1,0 +1,56 @@
+local wezterm = require 'wezterm'
+local act = wezterm.action
+
+local config = wezterm.config_builder()
+
+local function decode_uri_component(value)
+  return (value:gsub('%%(%x%x)', function(hex)
+    return string.char(tonumber(hex, 16))
+  end))
+end
+
+local function cwd_title(pane)
+  local cwd = pane and pane.current_working_dir
+  if not cwd then
+    return nil
+  end
+
+  local path = cwd.file_path or tostring(cwd)
+  path = path:gsub('^file://[^/]*', '')
+  path = decode_uri_component(path)
+
+  local parts = {}
+  for part in path:gmatch('[^/]+') do
+    parts[#parts + 1] = part
+  end
+
+  if #parts == 0 then
+    return '/'
+  end
+
+  if #parts == 1 then
+    return parts[1]
+  end
+
+  return string.format('%s/%s', parts[#parts - 1], parts[#parts])
+end
+
+wezterm.on('format-tab-title', function(tab, _, _, _, _, max_width)
+  local title = cwd_title(tab.active_pane) or tab.active_pane.title
+  return wezterm.truncate_right(title, max_width)
+end)
+
+config.keys = {
+  {
+    key = 'd',
+    mods = 'CMD',
+    action = act.SplitHorizontal { domain = 'CurrentPaneDomain' },
+  },
+  {
+    key = 'w',
+    mods = 'CMD',
+    action = act.CloseCurrentPane { confirm = false },
+  },
+}
+
+return config
