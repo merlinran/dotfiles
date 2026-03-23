@@ -95,10 +95,13 @@
 [merge]
 	guitool = meld
 	conflictStyle = diff3
+	tool = Kaleidoscope
 [mergetool]
         keepBackup = false
+	prompt = false
 [difftool]
-        prompt = false
+	prompt = false
+	trustExitCode = true
 [help]
         autocorrect = 1
 [push]
@@ -154,3 +157,10 @@
 [merge "mergiraf"]
 	name = mergiraf
 	driver = mergiraf merge --git %O %A %B -s %S -x %X -y %Y -p %P -l %L
+[diff]
+	tool = Kaleidoscope
+[difftool "Kaleidoscope"]
+	cmd = ksdiff --partial-changeset --relative-path \"$MERGED\" -- \"$LOCAL\" \"$REMOTE\"
+[mergetool "Kaleidoscope"]
+	cmd = ksdiff --merge --output \"$MERGED\" --base \"$BASE\" -- \"$LOCAL\" --snapshot \"$REMOTE\" --snapshot
+	trustExitCode = true

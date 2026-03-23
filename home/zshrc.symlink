@@ -83,4 +83,5 @@ eval "$(direnv hook zsh)"
 # inject custom CA certs to python environment
 export CERT_PATH=$(python3 -c "import certifi; print(certifi.where())")
 export SSL_CERT_FILE=${CERT_PATH}
+export HTTPLIB2_CA_BUNDLE=${CERT_PATH}
 export REQUESTS_CA_BUNDLE=${CERT_PATH}

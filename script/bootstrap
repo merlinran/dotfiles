@@ -28,7 +28,7 @@ fail () {
 }
 
 setup_gitconfig () {
-  if ! [ -f git/gitconfig.local.symlink ]
+  if ! [ -f home/gitconfig.local.symlink ]
   then
     info 'setup gitconfig'
 
@@ -43,7 +43,7 @@ setup_gitconfig () {
     user ' - What is your github author email?'
     read -e git_authoremail
 
-    sed -e "s/AUTHORNAME/$git_authorname/g" -e "s/AUTHOREMAIL/$git_authoremail/g" -e "s/GIT_CREDENTIAL_HELPER/$git_credential/g" git/gitconfig.local.symlink.example > git/gitconfig.local.symlink
+    sed -e "s/AUTHORNAME/$git_authorname/g" -e "s/AUTHOREMAIL/$git_authoremail/g" -e "s/GIT_CREDENTIAL_HELPER/$git_credential/g" home/gitconfig.local.symlink.example > home/gitconfig.local.symlink
 
     success 'gitconfig'
   fi
@@ -130,9 +130,28 @@ install_dotfiles () {
 
   local overwrite_all=false backup_all=false skip_all=false
 
-  for src in $(find -H "$DOTFILES_ROOT" -maxdepth 2 -name '*.symlink' -not -path '*.git*')
+  for src in $(find -H "$DOTFILES_ROOT" -name '*.symlink' -not -path '*.git*')
   do
-    dst="$HOME/.$(basename "${src%.*}")"
+    local rel="${src#"$DOTFILES_ROOT"/}"
+
+    if [[ "$rel" == home/* ]]
+    then
+      local home_rel="${rel#home/}"
+      local top="${home_rel%%/*}"
+      local rest=
+
+      if [[ "$home_rel" == */* ]]
+      then
+        rest="/${home_rel#*/}"
+      fi
+
+      dst="$HOME/.${top}${rest}"
+      dst="${dst%.symlink}"
+      mkdir -p "$(dirname "$dst")"
+    else
+      dst="$HOME/.$(basename "${src%.*}")"
+    fi
+
     link_file "$src" "$dst"
   done
 }

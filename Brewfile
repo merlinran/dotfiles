@@ -26,6 +26,7 @@ cask 'dash'
 cask 'dropbox'
 # cask 'iterm2'
 # cask 'ghostty'
+cask 'wezterm'
 cask 'macpass'
 cask 'notion'
 # cask 'rustdesk'
@@ -44,6 +45,7 @@ brew 'pipx' # to install pips globally
 # brew 'ollama'
 cask 'codex'
 cask 'chatgpt'
+cask 'claude-code'
 # cask 'cursor'
 
 # docker
