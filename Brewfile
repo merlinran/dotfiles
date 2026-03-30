@@ -3,6 +3,7 @@ if OS.mac?
 end
 
 # Shared CLI and development tooling.
+brew 'aws-sso-cli'
 brew 'coreutils'
 brew 'curl'
 brew 'cython'
