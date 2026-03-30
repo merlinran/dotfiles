@@ -52,18 +52,18 @@ brew 'wget'
 # brew 'yt-dlp'
 # brew 'zoxide'
 
+cask '1password'
+cask '1password-cli'
+cask 'claude-code'
+cask 'codex'
+
 if OS.mac?
-  cask '1password'
-  cask '1password-cli'
   cask 'brave-browser'
   cask 'chatgpt'
-  cask 'claude-code'
-  cask 'codex'
   cask 'dash'
-  cask 'dbeaver-community'
-  cask 'dropbox'
+  # cask 'dbeaver-community'
   # cask 'ghostty'
-  cask 'google-chrome'
+  # cask 'google-chrome'
   cask 'kdiff3'
   cask 'keepassxc'
   cask 'macpass'
@@ -78,7 +78,6 @@ end
 
 if OS.linux?
   flatpak 'com.slack.Slack'
-  flatpak 'dev.zed.Zed'
   flatpak 'org.chromium.Chromium'
   flatpak 'org.keepassxc.KeePassXC'
 end
