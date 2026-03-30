@@ -5,6 +5,7 @@
 - Prefer targeted inspection with `rg`, `rg --files`, and focused file reads over broad scans.
 - Preserve user changes you did not make. Do not revert unrelated modifications unless explicitly asked.
 - Make the smallest defensible change that solves the task, then validate it with the most relevant tests or checks you can run.
+- Follow a red-green TDD cycle when practical: start with a failing test, make the minimal change to pass it, then refactor only as needed.
 - State assumptions, blockers, and validation results plainly. If you could not verify something, say so.
 - Ask before taking destructive actions, networked installs, or expensive broad test runs when a focused check would answer the question.
 
