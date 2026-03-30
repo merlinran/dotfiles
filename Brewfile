@@ -4,6 +4,7 @@ end
 
 # Shared CLI and development tooling.
 brew 'aws-sso-cli'
+brew 'certifi'
 brew 'coreutils'
 brew 'curl'
 brew 'cython'
