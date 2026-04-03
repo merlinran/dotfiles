@@ -93,8 +93,3 @@ export CERT_PATH=$(python3 -c "import certifi; print(certifi.where())")
 export SSL_CERT_FILE=${CERT_PATH}
 export HTTPLIB2_CA_BUNDLE=${CERT_PATH}
 export REQUESTS_CA_BUNDLE=${CERT_PATH}
-
-if [[ -o interactive ]] && [[ -z "$TMUX" ]] && [[ -z "$SSH_CONNECTION" ]] && [[ -z "$NO_TMUX_AUTO_ATTACH" ]] && command -v tmux >/dev/null 2>&1
-then
-  # exec "$HOME/.dotfiles/bin/tmux-startup-sessions"
-fi
