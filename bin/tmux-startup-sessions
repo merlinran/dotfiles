@@ -1,0 +1,19 @@
+#!/bin/sh
+
+set -eu
+
+ensure_session () {
+  local name=$1
+  local path=$2
+
+  "$HOME/.dotfiles/bin/tmux-repo-session" --detach "$name" "$path"
+}
+
+ensure_session "jebena-api-server" "$HOME/enveritas/jebena-api-server/develop"
+ensure_session "data-pipeline" "$HOME/enveritas/data-pipeline/master"
+ensure_session "data-etl" "$HOME/enveritas/data-etl/master"
+ensure_session "snowflake" "$HOME/enveritas/snowflake/main"
+
+if tmux has-session 2>/dev/null; then
+  exec tmux attach-session
+fi

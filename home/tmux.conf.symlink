@@ -1,4 +1,28 @@
-bind-key j run-shell "$HOME/.dotfiles/bin/tmux-repo-window jebena-api-server /Users/merlinran/enveritas/jebena-api-server/develop"
-bind-key p run-shell "$HOME/.dotfiles/bin/tmux-repo-window data-pipeline /Users/merlinran/enveritas/data-pipeline/master"
-bind-key e run-shell "$HOME/.dotfiles/bin/tmux-repo-window data-etl /Users/merlinran/enveritas/data-etl/master"
-bind-key s run-shell "$HOME/.dotfiles/bin/tmux-repo-window snowflake /Users/merlinran/enveritas/snowflake/main"
+unbind C-a
+set -g prefix C-b
+bind C-b send-prefix
+
+unbind %
+unbind '"'
+bind | split-window -h
+bind - split-window -v
+
+set -g base-index 1
+setw -g pane-base-index 1
+
+set -g mouse on
+setw -g mode-keys vi
+
+bind r source-file $HOME/.tmux.conf \; display-message "tmux config reloaded"
+
+set -g @plugin 'tmux-plugins/tpm'
+set -g @plugin 'tmux-plugins/tmux-resurrect'
+set -g @plugin 'tmux-plugins/tmux-continuum'
+set -g @continuum-restore 'on'
+
+run-shell "$HOME/.tmux/plugins/tpm/tpm"
+
+bind-key j run-shell "$HOME/.dotfiles/bin/tmux-repo-session jebena-api-server $HOME/enveritas/jebena-api-server/develop"
+bind-key p run-shell "$HOME/.dotfiles/bin/tmux-repo-session data-pipeline $HOME/enveritas/data-pipeline/master"
+bind-key e run-shell "$HOME/.dotfiles/bin/tmux-repo-session data-etl $HOME/enveritas/data-etl/master"
+bind-key s run-shell "$HOME/.dotfiles/bin/tmux-repo-session snowflake $HOME/enveritas/snowflake/main"
