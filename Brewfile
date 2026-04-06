@@ -1,4 +1,6 @@
 if OS.mac?
+  cask '1password'
+  cask '1password-cli'
   cask_args appdir: '/Applications'
 end
 
@@ -53,8 +55,6 @@ brew 'wget'
 # brew 'yt-dlp'
 # brew 'zoxide'
 
-cask '1password'
-cask '1password-cli'
 cask 'claude-code'
 cask 'codex'
 
