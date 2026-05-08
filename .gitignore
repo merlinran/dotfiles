@@ -1,3 +1,6 @@
 home/gitconfig.local.symlink
 Brewfile.lock.json
 .codex
+.localrc
+.gitconfig.local
+.local.zsh

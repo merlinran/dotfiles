@@ -1,0 +1,146 @@
+#!/bin/bash
+
+# Setup script for local dotfiles configurations
+# This script manages local configs using marked sections that can be safely updated
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Marker patterns
+LOCALRC_START="# ===== DOTFILES LOCAL SECTION ====="
+LOCALRC_END="# ==================================="
+GITCONFIG_START="# === DOTFILES LOCAL SECTION ==="
+GITCONFIG_END="# ============================== "
+
+# Function to prompt for environment
+prompt_environment() {
+    echo -e "${YELLOW}Which environment are you setting up?${NC}"
+    echo "1) Work"
+    echo "2) Personal"
+    read -p "Enter choice [1-2]: " env_choice
+
+    case $env_choice in
+        1) echo "work" ;;
+        2) echo "personal" ;;
+        *) echo "Invalid choice. Defaulting to personal."; echo "personal" ;;
+    esac
+}
+
+# Function to get git email based on environment
+get_git_email() {
+    local env=$1
+    if [[ "$env" == "work" ]]; then
+        read -p "Enter work email [merlin@env-team.org]: " email
+        echo "${email:-merlin@env-team.org}"
+    else
+        read -p "Enter personal email [merlinran@gmail.com]: " email
+        echo "${email:-merlinran@gmail.com}"
+    fi
+}
+
+# Function to get git signing key
+get_git_signing_key() {
+    read -p "Enter GPG signing key (leave empty if none): " key
+    if [[ -n "$key" ]]; then
+        echo "	signingKey = $key"
+    else
+        echo ""
+    fi
+}
+
+# Function to update file with marked section
+update_file_section() {
+    local file=$1
+    local start_marker=$2
+    local end_marker=$3
+    local content=$4
+
+    # Create file if it doesn't exist
+    if [[ ! -f "$file" ]]; then
+        echo "Creating $file"
+        touch "$file"
+    fi
+
+    # Check if markers exist
+    if grep -q "$start_marker" "$file"; then
+        # Update existing section
+        echo "Updating marked section in $file"
+
+        # Create temp file with updated section
+        awk -v start="$start_marker" -v end="$end_marker" -v new_content="$content" '
+            $0 == start { in_section=1; print; print new_content; next }
+            $0 == end { in_section=0; print; next }
+            !in_section { print }
+        ' "$file" > "${file}.tmp"
+
+        mv "${file}.tmp" "$file"
+    else
+        # Add new section at the end
+        echo "Adding marked section to $file"
+        echo "" >> "$file"
+        echo "$start_marker" >> "$file"
+        echo "# Content managed by script/setup-local - DO NOT EDIT MANUALLY" >> "$file"
+        echo "$content" >> "$file"
+        echo "$end_marker" >> "$file"
+    fi
+}
+
+# Main setup
+main() {
+    echo -e "${GREEN}Setting up local dotfiles configuration...${NC}"
+    echo ""
+
+    # Prompt for environment
+    ENVIRONMENT=$(prompt_environment)
+    echo ""
+
+    # Setup ~/.localrc
+    echo -e "${YELLOW}Setting up ~/.localrc${NC}"
+
+    if [[ "$ENVIRONMENT" == "work" ]]; then
+        LOCALRC_CONTENT='export WORK_EMAIL="merlin@env-team.org"
+export COMPANY_DOMAIN="env-team.org"'
+
+        read -p "Add work-specific paths? (y/N): " add_paths
+        if [[ "$add_paths" =~ ^[Yy]$ ]]; then
+            read -p "Enter work project path [~/work]: " work_path
+            LOCALRC_CONTENT="${LOCALRC_CONTENT}
+export WORK_PROJECTS=\"${work_path:-~/work}\""
+        fi
+    else
+        LOCALRC_CONTENT='# Personal environment variables
+# Add your personal environment variables here'
+    fi
+
+    update_file_section "$HOME/.localrc" "$LOCALRC_START" "$LOCALRC_END" "$LOCALRC_CONTENT"
+
+    # Setup ~/.gitconfig.local
+    echo ""
+    echo -e "${YELLOW}Setting up ~/.gitconfig.local${NC}"
+
+    GIT_EMAIL=$(get_git_email)
+    GIT_SIGNING_KEY=$(get_git_signing_key)
+
+    GITCONFIG_CONTENT="[user]
+	email = $GIT_EMAIL$GIT_SIGNING_KEY"
+
+    update_file_section "$HOME/.gitconfig.local" "$GITCONFIG_START" "$GITCONFIG_END" "$GITCONFIG_CONTENT"
+
+    echo ""
+    echo -e "${GREEN}✓ Local configuration setup complete!${NC}"
+    echo ""
+    echo "Files created/updated:"
+    echo "  - $HOME/.localrc"
+    echo "  - $HOME/.gitconfig.local"
+    echo ""
+    echo "You can add manual configurations to these files outside the marked sections."
+    echo "Those manual additions will be preserved when re-running this script."
+}
+
+# Run main function
+main

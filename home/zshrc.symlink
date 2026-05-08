@@ -25,25 +25,25 @@ do
   source $file
 done
 
+# initialize autocomplete here, otherwise functions won't be loaded
+autoload -Uz compinit
+compinit -i
+
+autoload -U bashcompinit
+bashcompinit
+
 # load everything but the path and completion files
 for file in ${${config_files:#*/path.zsh}:#*/completion.zsh}
 do
   source $file
 done
 
-# initialize autocomplete here, otherwise functions won't be loaded
-# autoload -Uz compinit
-# compinit -i
-# 
-# autoload -U bashcompinit
-# bashcompinit
-# 
-# # load every completion after autocomplete loads
-# for file in ${(M)config_files:#*/completion.zsh}
-# do
-#   source $file
-# done
-# 
+# load every completion after autocomplete loads
+for file in ${(M)config_files:#*/completion.zsh}
+do
+  source $file
+done
+
 unset config_files
 
 # Better history
@@ -93,3 +93,8 @@ export CERT_PATH=$(python3 -c "import certifi; print(certifi.where())")
 export SSL_CERT_FILE=${CERT_PATH}
 export HTTPLIB2_CA_BUNDLE=${CERT_PATH}
 export REQUESTS_CA_BUNDLE=${CERT_PATH}
+
+# eval "$(zoxide init zsh)"
+
+# Rust cargo bin
+export PATH="$HOME/.cargo/bin:$PATH"

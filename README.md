@@ -68,6 +68,74 @@ defaults, and so on. Tweak this script, and occasionally run `dot` from
 time to time to keep your environment fresh and up-to-date. You can find
 this script in `bin/`.
 
+## managing multiple environments
+
+This dotfiles setup supports managing multiple environments (e.g., work and personal) using local configuration files. The shared configurations live in the repository, while environment-specific settings stay local and are never committed.
+
+### setup
+
+After running `script/bootstrap`, run the interactive setup script:
+
+```sh
+script/setup-local
+```
+
+This will prompt you for your environment type and create/update local configuration files with marked sections.
+
+### local configuration files
+
+Two local files are managed:
+
+1. **`~/.localrc`** - Environment variables and shell-specific settings
+2. **`~/.gitconfig.local`** - Git user settings (email, signing key, etc.)
+
+These files are excluded from git (see `.gitignore`) and contain marked sections that can be safely updated by `script/setup-local`.
+
+### marker-based sections
+
+Local files use delimited sections that allow automated updates while preserving manual additions:
+
+```bash
+# ~/.localrc
+# ===== DOTFILES LOCAL SECTION =====
+# Content managed by script/setup-local - DO NOT EDIT MANUALLY
+export WORK_EMAIL="merlin@env-team.org"
+# ===================================
+
+# Your manual additions below - SAFE from script updates
+export PATH="$HOME/custom/bin:$PATH"
+```
+
+```ini
+# ~/.gitconfig.local
+# === DOTFILES LOCAL SECTION ===
+# Content managed by script/setup-local - DO NOT EDIT MANUALLY
+[user]
+  email = merlin@env-team.org
+# ==============================
+
+# Your manual git config below - SAFE from script updates
+[github]
+  user = merlinwork
+```
+
+### what goes where
+
+- **Shared (in repo)**: Aliases, functions, editor configs, shell preferences, tool configurations
+- **Local (on machine)**: Email addresses, API keys, work-specific paths, personal tooling, environment variables
+
+### safe updates
+
+You can re-run `script/setup-local` at any time to update the managed sections. Any content you add outside the marked sections will be preserved.
+
+### switching environments
+
+To switch between work and personal setups:
+
+1. Re-run `script/setup-local` and choose the different environment
+2. The marked sections will be updated with new values
+3. Your manual additions outside the markers remain intact
+
 ## bugs
 
 I want this to work for everyone; that means when you clone it down it should
