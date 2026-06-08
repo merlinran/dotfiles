@@ -9,6 +9,7 @@ end
 /* brew 'certifi' */
 /* brew 'coreutils' */
 brew 'curl'
+brew 'difftastic'
 /* brew 'cython' */
 /* brew 'direnv' */
 /* brew 'docker' */
