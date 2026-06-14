@@ -1,45 +1,45 @@
-if OS.mac?
-  cask '1password'
-  cask '1password-cli'
-  cask_args appdir: '/Applications'
-end
+# if OS.mac?
+#   cask '1password'
+#   cask '1password-cli'
+#   cask_args appdir: '/Applications'
+# end
 
 # Shared CLI and development tooling.
-/* brew 'aws-sso-cli' */
-/* brew 'certifi' */
-/* brew 'coreutils' */
+# brew 'aws-sso-cli' 
+# brew 'certifi' 
+# brew 'coreutils' 
 brew 'curl'
 brew 'difftastic'
-/* brew 'cython' */
-/* brew 'direnv' */
-/* brew 'docker' */
-/* brew 'docker-buildx' */
-/* brew 'docker-compose' */
+# brew 'cython' 
+# brew 'direnv' 
+# brew 'docker' 
+# brew 'docker-buildx' 
+# brew 'docker-compose' 
 brew 'findutils'
 brew 'fswatch'
-/* brew 'fzf' */
+# brew 'fzf' 
 brew 'gcc'
 brew 'gh'
 brew 'git'
-/* brew 'git-flow' */
+# brew 'git-flow' 
 brew 'git-lfs'
 brew 'gnu-sed'
 brew 'gnupg'
 brew 'grep'
 brew 'helix'
 brew 'jq'
-/* brew 'jpeg-turbo' */
-/* brew 'libffi' */
-/* brew 'libpq' */
+# brew 'jpeg-turbo' 
+# brew 'libffi' 
+# brew 'libpq' 
 brew 'libtiff'
-/* brew 'libxml2' */
-/* brew 'libxslt' */
+# brew 'libxml2' 
+# brew 'libxslt' 
 brew 'libzip'
 brew 'lua'
 brew 'make'
 brew 'mergiraf'
 brew 'node'
-/* brew 'openblas' */
+# brew 'openblas' 
 brew 'openssl@3'
 brew 'pkgconf'
 brew 'pipx'
@@ -60,34 +60,34 @@ cask 'claude-code'
 cask 'codex'
 
 if OS.mac?
-  /* cask 'brave-browser' */
+  # cask 'brave-browser' 
   cask 'chatgpt'
   cask 'dash'
   # cask 'dbeaver-community'
   # cask 'ghostty'
   # cask 'google-chrome'
-  /* cask 'kdiff3' */
+  # cask 'kdiff3' 
   cask 'keepassxc'
   cask 'macpass'
   cask 'notion'
   # cask 'rustdesk'
-  /* cask 'slack' */
+  # cask 'slack' 
   # cask 'visual-studio-code'
-  /* cask 'wezterm' */
+  # cask 'wezterm' 
   cask 'zed'
-  /* cask 'zoom' */
+  # cask 'zoom' 
 end
 
-/* if OS.linux? */
-/*   flatpak 'com.slack.Slack' */
-/*   flatpak 'org.chromium.Chromium' */
-/*   flatpak 'org.keepassxc.KeePassXC' */
-/* end */
+# if OS.linux? 
+#   flatpak 'com.slack.Slack' 
+#   flatpak 'org.chromium.Chromium' 
+#   flatpak 'org.keepassxc.KeePassXC' 
+# end 
 
 # macOS-only Docker Desktop alternative.
-/* if OS.mac? */
-/*   brew 'colima' */
-/* end */
+# if OS.mac? 
+#   brew 'colima' 
+# end 
 
 # AI
 # brew 'aider'

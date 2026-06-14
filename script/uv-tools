@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+#
+# Install and upgrade globally-available Python CLI tools via uv.
+#
+
+set -e
+
+cd "$(dirname "$0")/.."
+
+echo "› uv tool install"
+
+tools="
+  ruff
+  ty
+  prek
+  google-colab-cli
+"
+
+for tool in $tools; do
+  uv tool install "$tool" --upgrade
+done
