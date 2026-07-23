@@ -56,6 +56,7 @@ brew 'wget'
 # brew 'yt-dlp'
 # brew 'zoxide'
 
+brew 'pi-coding-agent'
 cask 'claude-code'
 cask 'codex'
 
@@ -70,7 +71,7 @@ if OS.mac?
   cask 'keepassxc'
   cask 'macpass'
   cask 'notion'
-  # cask 'rustdesk'
+  cask 'rustdesk'
   # cask 'slack' 
   # cask 'visual-studio-code'
   # cask 'wezterm' 

@@ -6,6 +6,9 @@
 - Make the smallest defensible change that solves the task, then validate it with the most relevant tests or checks you can run.
 - Follow a red-green TDD cycle when practical: start with a failing test, make the minimal change to pass it, then refactor only as needed.
 - State assumptions, blockers, and validation results plainly. If you could not verify something, say so.
+- Never claim a result without verifying it first. If you changed a file, read it back. If you ran a command, check its output. If you set up a tool, test that it works. Assert-and-check is cheap; being wrong is expensive.
 - Ask before taking destructive actions, networked installs, or expensive broad test runs when a focused check would answer the question.
 - Always seek for the most direct and efficient path to the solution, even if it means asking the user for clarification or additional information.
 - Always fix the root cause of a problem rather than applying a superficial patch or trying something to see if it works, unless the latter is explicitly requested or justified by constraints.
+- HuggingFace is inaccessible from this machine. Use `https://hf-mirror.com` as the endpoint for all HF downloads: set `HF_ENDPOINT=https://hf-mirror.com` for Python libraries, or replace `huggingface.co` with `hf-mirror.com` in direct URLs. The mirror does not require authentication for public repos.
+- Commit messages: never add "Generated with Claude Code", "via Happy", or "Co-Authored-By" trailers. Write standard commit messages following the project's existing conventions.
