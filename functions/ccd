@@ -1,0 +1,3 @@
+#!/bin/zsh
+# Claude Code with DeepSeek API
+_claude_provider CCD "$@"

@@ -1,0 +1,3 @@
+#!/bin/zsh
+# Original Claude Code with default Anthropic OAuth login
+_claude_provider CCC "$@"

@@ -1,0 +1,3 @@
+#!/bin/zsh
+# Codex with DeepSeek API
+_codex_provider CDX "$@"

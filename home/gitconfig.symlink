@@ -140,11 +140,6 @@
 [url "git://gist.github.com/"]
 	insteadOf = "gist:"
 
-[filter "lfs"]
-	smudge = git-lfs smudge -- %f
-	process = git-lfs filter-process
-	required = true
-	clean = git-lfs clean -- %f
 [lfs]
 	lockverify = true
 

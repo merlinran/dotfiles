@@ -1,0 +1,3 @@
+#!/bin/zsh
+# Claude Code with Kimi API
+_claude_provider CCK "$@"

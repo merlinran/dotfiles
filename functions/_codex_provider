@@ -1,0 +1,64 @@
+#!/bin/zsh
+#
+# Launch codex with provider-specific config.
+# Usage: _codex_provider <PREFIX> [codex args...]
+#
+# PREFIX is one of:
+#   CODEX - vanilla codex with default OpenAI config
+#   CDX   - DeepSeek API
+#
+# Config: ~/.codex/ directory
+#   - config.toml: main config (shared, provider-agnostic sections)
+#   - models.json: model catalog (shared, includes deepseek entries)
+#   - config.deepseek.toml: DeepSeek overrides (model, provider, auth)
+#
+# For CDX, we create a temp CODEX_HOME with symlinks to shared files
+# plus a merged config.toml.
+
+local prefix="$1"
+shift
+
+local codex_home="$HOME/.codex"
+local temp_dir
+
+local codex_bin="/opt/homebrew/bin/codex"
+
+if [[ "$prefix" == "CODEX" ]]; then
+  # Vanilla codex: use default config with OpenAI/ChatGPT auth
+  "$codex_bin" "$@"
+  return $?
+fi
+
+if [[ "$prefix" == "CDX" ]]; then
+  # Create temp CODEX_HOME for DeepSeek session
+  temp_dir=$(mktemp -d /tmp/codex-deepseek-XXXX)
+
+  # Symlink shared files (skip auth.json — DeepSeek uses bearer token from config)
+  ln -s "$codex_home/models.json" "$temp_dir/models.json"
+  ln -s "$codex_home/sessions" "$temp_dir/sessions" 2>/dev/null
+
+  # Build merged config:
+  # 1. DeepSeek top-level overrides (model, provider, auth)
+  # 2. Base config with those same top-level keys stripped
+  #    (the [model_providers.deepseek] section already lives in base config)
+  {
+    echo 'model = "deepseek-v4-flash"'
+    echo 'model_provider = "deepseek"'
+    echo 'preferred_auth_method = "apikey"'
+    echo 'forced_login_method = "api"'
+    echo 'model_reasoning_effort = "high"'
+    echo "model_catalog_json = \"$codex_home/models.json\""
+    echo ''
+    grep -v -E '^(model|model_provider|preferred_auth_method|forced_login_method|model_reasoning_effort|model_catalog_json)\s*=' \
+      "$codex_home/config.toml"
+  } > "$temp_dir/config.toml"
+
+  CODEX_HOME="$temp_dir" "$codex_bin" "$@"
+  local ret=$?
+
+  rm -rf "$temp_dir"
+  return $ret
+fi
+
+echo "Unknown prefix: $prefix" >&2
+return 1

@@ -1,0 +1,62 @@
+#!/bin/zsh
+#
+# Launch claude with provider-specific env vars.
+# Usage: _claude_provider <PREFIX> [claude args...]
+#
+# PREFIX is one of:
+#   CCC - vanilla claude with default OAuth login (unsets provider vars)
+#   CCD - DeepSeek
+#   CCK - Kimi
+#
+# Config file: ~/.config/claude/providers.env
+# Each line: <PREFIX>_<ENV_VAR>=<value>
+# Example:  CCD_ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
+
+local prefix="$1"
+shift
+
+local config_file="$HOME/.config/claude/providers.env"
+
+# Vars to unset when using default Anthropic (CCC) or before setting new ones
+local provider_vars=(
+  ANTHROPIC_BASE_URL
+  ANTHROPIC_API_KEY
+  ANTHROPIC_AUTH_TOKEN
+  ANTHROPIC_MODEL
+  ANTHROPIC_DEFAULT_FABLE_MODEL
+  ANTHROPIC_DEFAULT_FABLE_MODEL_NAME
+  ANTHROPIC_DEFAULT_HAIKU_MODEL
+  ANTHROPIC_DEFAULT_OPUS_MODEL
+  ANTHROPIC_DEFAULT_OPUS_MODEL_NAME
+  ANTHROPIC_DEFAULT_SONNET_MODEL
+  ANTHROPIC_DEFAULT_SONNET_MODEL_NAME
+)
+
+# Unset any previously set provider vars
+for v in $provider_vars; do
+  unset $v
+done
+
+if [[ "$prefix" == "CCC" ]]; then
+  # CCC: just unset everything and let claude use default OAuth login
+  claude "$@"
+  return $?
+fi
+
+# CCD/CCK: load provider config from env file
+if [[ ! -f "$config_file" ]]; then
+  echo "Error: provider config file not found: $config_file" >&2
+  echo "Create it with one line per var, e.g.:" >&2
+  echo "  ${prefix}_ANTHROPIC_BASE_URL=https://api.example.com/anthropic" >&2
+  echo "  ${prefix}_ANTHROPIC_API_KEY=sk-..." >&2
+  return 1
+fi
+
+# Read matching vars and export them with the prefix stripped
+while IFS='=' read -r key value; do
+  [[ "$key" == ${prefix}_* ]] || continue
+  local varname="${key#${prefix}_}"
+  export "$varname"="$value"
+done < "$config_file"
+
+claude "$@"
