@@ -1,0 +1,3 @@
+#!/bin/zsh
+# pi with Kimi For Coding API
+_pi_provider PIK "$@"

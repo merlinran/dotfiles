@@ -1,0 +1,44 @@
+#!/bin/zsh
+#
+# Launch pi with provider-specific config.
+# Usage: _pi_provider <PREFIX> [pi args...]
+#
+# PREFIX is one of:
+#   PIK - Kimi For Coding
+#   PID - DeepSeek
+#
+# API keys are read from ~/.config/claude/providers.env (shared with claude/codex).
+
+local prefix="$1"
+shift
+
+local pi_bin="/opt/homebrew/bin/pi"
+local config_file="$HOME/.config/claude/providers.env"
+
+local provider model env_var api_key
+
+case "$prefix" in
+  PIK)
+    provider="kimi-coding"
+    model="k3"
+    env_var="KIMI_API_KEY"
+    api_key=$(grep '^CCK_ANTHROPIC_AUTH_TOKEN=' "$config_file" | cut -d'=' -f2-)
+    ;;
+  PID)
+    provider="deepseek"
+    model="deepseek-v4-pro"
+    env_var="DEEPSEEK_API_KEY"
+    api_key=$(grep '^CCD_ANTHROPIC_AUTH_TOKEN=' "$config_file" | cut -d'=' -f2-)
+    ;;
+  *)
+    echo "Unknown prefix: $prefix" >&2
+    return 1
+    ;;
+esac
+
+if [[ -z "$api_key" ]]; then
+  echo "Error: no API key found for $prefix in $config_file" >&2
+  return 1
+fi
+
+env "$env_var=$api_key" "$pi_bin" --provider "$provider" --model "$model" "$@"

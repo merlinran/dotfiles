@@ -42,7 +42,7 @@ if [[ "$prefix" == "CDX" ]]; then
   # 2. Base config with those same top-level keys stripped
   #    (the [model_providers.deepseek] section already lives in base config)
   {
-    echo 'model = "deepseek-v4-flash"'
+    echo 'model = "deepseek-v4-pro"'
     echo 'model_provider = "deepseek"'
     echo 'preferred_auth_method = "apikey"'
     echo 'forced_login_method = "api"'

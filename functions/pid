@@ -1,0 +1,3 @@
+#!/bin/zsh
+# pi with DeepSeek API
+_pi_provider PID "$@"
