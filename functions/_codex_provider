@@ -127,8 +127,10 @@ _codex_prepare_resume_provider() {
   done
 }
 
-# DeepSeek writes reasoning items with content[]; OpenAI rejects that on replay.
+# DeepSeek writes reasoning items OpenAI cannot replay (content[] and/or
+# encrypted_content). Drop non-OpenAI reasoning items before codex resume.
 # See: https://github.com/openai/codex/issues/36551
+#      https://github.com/openai/codex/issues/36704
 _codex_sanitize_rollout_for_openai() {
   local home="$1" session_id="$2"
   local rollout_path
@@ -142,24 +144,38 @@ import json, sys
 path = sys.argv[1]
 with open(path, "r+", encoding="utf-8") as f:
     lines = f.readlines()
-    changed = 0
-    for i, line in enumerate(lines):
+    out = []
+    dropped = 0
+    nulled = 0
+    for line in lines:
         obj = json.loads(line)
         if obj.get("type") != "response_item":
+            out.append(line)
             continue
         payload = obj.get("payload", {})
         if payload.get("type") != "reasoning":
+            out.append(line)
+            continue
+        rid = payload.get("id") or ""
+        # OpenAI-native reasoning ids start with rs_. DeepSeek/custom providers
+        # write UUID ids with undecryptable encrypted_content on OpenAI replay.
+        if not str(rid).startswith("rs_"):
+            dropped += 1
             continue
         content = payload.get("content")
         if isinstance(content, list) and len(content) > 0:
             payload["content"] = None
-            lines[i] = json.dumps(obj, ensure_ascii=False) + "\n"
-            changed += 1
-    if changed:
+            line = json.dumps(obj, ensure_ascii=False) + "\n"
+            nulled += 1
+        out.append(line)
+    if dropped or nulled:
         f.seek(0)
-        f.writelines(lines)
+        f.writelines(out)
         f.truncate()
-        print(f"sanitized {changed} reasoning item(s) in {path}", file=sys.stderr)
+        print(
+            f"sanitized {path}: dropped {dropped} reasoning, nulled content on {nulled}",
+            file=sys.stderr,
+        )
 PY
 }
 
