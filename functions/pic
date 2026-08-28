@@ -7,5 +7,5 @@
 /opt/homebrew/bin/pi \
   --provider cursor \
   --model auto \
-  --models "cursor/auto,cursor/composer-2.5,cursor/claude-opus-5,cursor/claude-fable-5" \
+  --models "cursor/auto,cursor/composer-2.5,cursor/claude-opus-5,cursor/claude-fable-5,cursor/cursor-grok-4.5,cursor/cursor-grok-4.6" \
   "$@"
