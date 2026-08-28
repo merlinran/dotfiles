@@ -4,3 +4,6 @@ Brewfile.lock.json
 .localrc
 .gitconfig.local
 .local.zsh
+
+# Pi agent settings change frequently; manage locally
+home/pi/
