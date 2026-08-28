@@ -1,0 +1,3 @@
+#!/bin/zsh
+# Vanilla codex with OpenAI/ChatGPT auth
+_codex_provider CODEX "$@"

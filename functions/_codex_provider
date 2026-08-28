@@ -24,7 +24,7 @@ local temp_dir
 local codex_bin="/opt/homebrew/bin/codex"
 
 # Resolve a resume/fork session id from codex args (uuid, name, or --last).
-_cdx_resolve_resume_session_id() {
+_codex_resolve_resume_session_id() {
   local home="$1"
   shift
   local -a args=("$@")
@@ -62,10 +62,9 @@ _cdx_resolve_resume_session_id() {
   done
 }
 
-# Resume restores model_provider from rollout session_meta / thread state.
-# Patch both so CDX sessions route to DeepSeek instead of OpenAI OAuth.
-_cdx_patch_thread_provider() {
-  local home="$1" session_id="$2" provider="deepseek"
+# Patch session metadata so resume routes to the requested provider.
+_codex_patch_thread_provider() {
+  local home="$1" session_id="$2" provider="$3"
   [[ -n "$session_id" ]] || return 0
   [[ -f "$home/state_5.sqlite" ]] || return 0
 
@@ -102,22 +101,22 @@ with open(path, "r+", encoding="utf-8") as f:
 PY
 }
 
-_cdx_prepare_resume_provider() {
-  local home="$1"
-  shift
+_codex_prepare_resume_provider() {
+  local home="$1" provider="$2"
+  shift 2
   local -a args=("$@")
   local arg session_id
 
   for arg in "${args[@]}"; do
     [[ "$arg" == "resume" || "$arg" == "fork" ]] || continue
 
-    session_id="$(_cdx_resolve_resume_session_id "$home" "${args[@]}")"
+    session_id="$(_codex_resolve_resume_session_id "$home" "${args[@]}")"
     if [[ -n "$session_id" ]]; then
-      _cdx_patch_thread_provider "$home" "$session_id"
-    else
-      # Picker mode: fix likely DeepSeek threads before the user selects one.
+      _codex_patch_thread_provider "$home" "$session_id" "$provider"
+      [[ "$provider" == "openai" ]] && _codex_sanitize_rollout_for_openai "$home" "$session_id"
+    elif [[ "$provider" == "deepseek" ]]; then
       while IFS= read -r session_id; do
-        _cdx_patch_thread_provider "$home" "$session_id"
+        _codex_patch_thread_provider "$home" "$session_id" "$provider"
       done < <(sqlite3 "$home/state_5.sqlite" \
         "SELECT id FROM threads
          WHERE archived=0
@@ -128,8 +127,44 @@ _cdx_prepare_resume_provider() {
   done
 }
 
+# DeepSeek writes reasoning items with content[]; OpenAI rejects that on replay.
+# See: https://github.com/openai/codex/issues/36551
+_codex_sanitize_rollout_for_openai() {
+  local home="$1" session_id="$2"
+  local rollout_path
+  rollout_path=$(sqlite3 "$home/state_5.sqlite" \
+    "SELECT rollout_path FROM threads
+     WHERE id='$session_id' OR name='$session_id' LIMIT 1;" 2>/dev/null)
+  [[ -n "$rollout_path" && -f "$rollout_path" ]] || return 0
+
+  python3 - "$rollout_path" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path, "r+", encoding="utf-8") as f:
+    lines = f.readlines()
+    changed = 0
+    for i, line in enumerate(lines):
+        obj = json.loads(line)
+        if obj.get("type") != "response_item":
+            continue
+        payload = obj.get("payload", {})
+        if payload.get("type") != "reasoning":
+            continue
+        content = payload.get("content")
+        if isinstance(content, list) and len(content) > 0:
+            payload["content"] = None
+            lines[i] = json.dumps(obj, ensure_ascii=False) + "\n"
+            changed += 1
+    if changed:
+        f.seek(0)
+        f.writelines(lines)
+        f.truncate()
+        print(f"sanitized {changed} reasoning item(s) in {path}", file=sys.stderr)
+PY
+}
+
 if [[ "$prefix" == "CODEX" ]]; then
-  # Vanilla codex: use default config with OpenAI/ChatGPT auth
+  _codex_prepare_resume_provider "$codex_home" "openai" "$@"
   "$codex_bin" "$@"
   return $?
 fi
@@ -175,7 +210,7 @@ if [[ "$prefix" == "CDX" ]]; then
     -c 'forced_login_method="api"'
   )
 
-  _cdx_prepare_resume_provider "$codex_home" "$@"
+  _codex_prepare_resume_provider "$codex_home" "deepseek" "$@"
 
   CODEX_HOME="$temp_dir" "$codex_bin" "${cdx_config[@]}" "$@"
   local ret=$?
