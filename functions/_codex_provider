@@ -23,6 +23,111 @@ local temp_dir
 
 local codex_bin="/opt/homebrew/bin/codex"
 
+# Resolve a resume/fork session id from codex args (uuid, name, or --last).
+_cdx_resolve_resume_session_id() {
+  local home="$1"
+  shift
+  local -a args=("$@")
+  local i arg saw=0
+
+  for (( i=1; i<=${#args}; i++ )); do
+    arg="${args[i]}"
+    if [[ "$arg" == "resume" || "$arg" == "fork" ]]; then
+      saw=1
+      continue
+    fi
+    if (( saw )); then
+      case "$arg" in
+        --last)
+          sqlite3 "$home/state_5.sqlite" \
+            "SELECT id FROM threads
+             WHERE archived=0 AND cwd='${PWD//'/''}'
+             ORDER BY recency_at_ms DESC LIMIT 1;" 2>/dev/null \
+            || sqlite3 "$home/state_5.sqlite" \
+              "SELECT id FROM threads
+               WHERE archived=0
+               ORDER BY recency_at_ms DESC LIMIT 1;" 2>/dev/null
+          return 0
+          ;;
+        -*) ;;
+        *)
+          sqlite3 "$home/state_5.sqlite" \
+            "SELECT id FROM threads
+             WHERE id='$arg' OR name='$arg'
+             LIMIT 1;" 2>/dev/null || echo "$arg"
+          return 0
+          ;;
+      esac
+    fi
+  done
+}
+
+# Resume restores model_provider from rollout session_meta / thread state.
+# Patch both so CDX sessions route to DeepSeek instead of OpenAI OAuth.
+_cdx_patch_thread_provider() {
+  local home="$1" session_id="$2" provider="deepseek"
+  [[ -n "$session_id" ]] || return 0
+  [[ -f "$home/state_5.sqlite" ]] || return 0
+
+  sqlite3 "$home/state_5.sqlite" \
+    "UPDATE threads SET model_provider='$provider'
+     WHERE id='$session_id' OR name='$session_id';" 2>/dev/null
+
+  local rollout_path
+  rollout_path=$(sqlite3 "$home/state_5.sqlite" \
+    "SELECT rollout_path FROM threads
+     WHERE id='$session_id' OR name='$session_id' LIMIT 1;" 2>/dev/null)
+  [[ -n "$rollout_path" && -f "$rollout_path" ]] || return 0
+
+  python3 - "$rollout_path" "$provider" <<'PY'
+import json, sys
+path, provider = sys.argv[1], sys.argv[2]
+with open(path, "r+", encoding="utf-8") as f:
+    lines = f.readlines()
+    changed = False
+    for i, line in enumerate(lines):
+        obj = json.loads(line)
+        if obj.get("type") != "session_meta":
+            continue
+        payload = obj.setdefault("payload", {})
+        if payload.get("model_provider") != provider:
+            payload["model_provider"] = provider
+            lines[i] = json.dumps(obj, ensure_ascii=False) + "\n"
+            changed = True
+        break
+    if changed:
+        f.seek(0)
+        f.writelines(lines)
+        f.truncate()
+PY
+}
+
+_cdx_prepare_resume_provider() {
+  local home="$1"
+  shift
+  local -a args=("$@")
+  local arg session_id
+
+  for arg in "${args[@]}"; do
+    [[ "$arg" == "resume" || "$arg" == "fork" ]] || continue
+
+    session_id="$(_cdx_resolve_resume_session_id "$home" "${args[@]}")"
+    if [[ -n "$session_id" ]]; then
+      _cdx_patch_thread_provider "$home" "$session_id"
+    else
+      # Picker mode: fix likely DeepSeek threads before the user selects one.
+      while IFS= read -r session_id; do
+        _cdx_patch_thread_provider "$home" "$session_id"
+      done < <(sqlite3 "$home/state_5.sqlite" \
+        "SELECT id FROM threads
+         WHERE archived=0
+           AND (model LIKE '%deepseek%' OR model_provider IN ('custom', 'deepseek'))
+         ORDER BY recency_at_ms DESC;" 2>/dev/null)
+    fi
+    return 0
+  done
+}
+
 if [[ "$prefix" == "CODEX" ]]; then
   # Vanilla codex: use default config with OpenAI/ChatGPT auth
   "$codex_bin" "$@"
@@ -69,6 +174,8 @@ if [[ "$prefix" == "CDX" ]]; then
     -c 'preferred_auth_method="apikey"'
     -c 'forced_login_method="api"'
   )
+
+  _cdx_prepare_resume_provider "$codex_home" "$@"
 
   CODEX_HOME="$temp_dir" "$codex_bin" "${cdx_config[@]}" "$@"
   local ret=$?
