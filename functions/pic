@@ -1,0 +1,11 @@
+#!/bin/zsh
+# pi with Cursor Pro subscription models
+#
+# Default model: cursor-grok-4.6 (Grok 4.6 via Cursor).
+# Ctrl+P cycles only the curated list passed to --models; edit to taste.
+# Note: the full model picker (/model, ctrl+l) still lists every Cursor model.
+/opt/homebrew/bin/pi \
+  --provider cursor \
+  --model cursor-grok-4.6 \
+  --models "cursor/cursor-grok-4.6,cursor/composer-2.5,cursor/claude-opus-5,cursor/claude-fable-5,cursor/gpt-5.6-sol" \
+  "$@"
