@@ -37,6 +37,15 @@ if [[ "$prefix" == "CDX" ]]; then
   ln -s "$codex_home/models.json" "$temp_dir/models.json"
   ln -s "$codex_home/sessions" "$temp_dir/sessions" 2>/dev/null
 
+  # Thread/state DBs: resume reads model_provider from here (often "custom" or
+  # "openai" for CDX sessions). Symlink so resume sees the same threads.
+  for f in state_5.sqlite thread_history_1.sqlite history.jsonl session_index.jsonl; do
+    [[ -e "$codex_home/$f" ]] && ln -s "$codex_home/$f" "$temp_dir/$f"
+  done
+  for d in skills plugins; do
+    [[ -d "$codex_home/$d" ]] && ln -s "$codex_home/$d" "$temp_dir/$d"
+  done
+
   # Build merged config:
   # 1. DeepSeek top-level overrides (model, provider, auth)
   # 2. Base config with those same top-level keys stripped
@@ -53,7 +62,15 @@ if [[ "$prefix" == "CDX" ]]; then
       "$codex_home/config.toml"
   } > "$temp_dir/config.toml"
 
-  CODEX_HOME="$temp_dir" "$codex_bin" "$@"
+  # -c overrides beat resumed thread state. Without these, resume restores the
+  # thread's stored model_provider (custom/openai) and routes to OpenAI OAuth.
+  local -a cdx_config=(
+    -c 'model_provider="deepseek"'
+    -c 'preferred_auth_method="apikey"'
+    -c 'forced_login_method="api"'
+  )
+
+  CODEX_HOME="$temp_dir" "$codex_bin" "${cdx_config[@]}" "$@"
   local ret=$?
 
   rm -rf "$temp_dir"
