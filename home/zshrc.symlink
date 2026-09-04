@@ -60,12 +60,11 @@ bindkey -a k vi-up-line-or-history
 autoload -U history-search-end
 zle -N history-beginning-search-backward-end history-search-end
 zle -N history-beginning-search-forward-end history-search-end
-zle -N history-incremental-search-backward-end history-search-end
-zle -N history-incremental-search-forward-end history-search-end
 bindkey "^[[A" history-beginning-search-backward-end
 bindkey "^[[B" history-beginning-search-forward-end
-bindkey "^R" history-incremental-search-backward-end
-bindkey "^S" history-incremental-search-forward-end
+# Use stock incremental search so repeated ^R/^S cycle older/newer matches
+bindkey "^R" history-incremental-search-backward
+bindkey "^S" history-incremental-search-forward
 
 #THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
 export SDKMAN_DIR="$HOME/.sdkman"
@@ -100,3 +99,18 @@ eval "$(direnv hook zsh)"
 export PATH="$HOME/.cargo/bin:$PATH"
 
 export PATH="$HOME/.local/bin:$PATH"
+
+# Keep pi-cursor's x-cursor-client-version aligned with the installed Cursor agent CLI.
+# Without this, pi-cursor defaults to cli-2026.05.01-eea359f and Cursor can wire-drift.
+if [[ -z "${PI_CURSOR_CLIENT_VERSION:-}" ]]; then
+  _pi_cursor_agent_ver=""
+  if command -v agent >/dev/null 2>&1; then
+    _pi_cursor_agent_ver="$(agent --version 2>/dev/null | head -n1)"
+  elif command -v cursor-agent >/dev/null 2>&1; then
+    _pi_cursor_agent_ver="$(cursor-agent --version 2>/dev/null | head -n1)"
+  fi
+  if [[ "$_pi_cursor_agent_ver" =~ ^(20[0-9]{2}\.[0-9]{2}\.[0-9]{2}-[a-f0-9]+)$ ]]; then
+    export PI_CURSOR_CLIENT_VERSION="cli-${_pi_cursor_agent_ver}"
+  fi
+  unset _pi_cursor_agent_ver
+fi
