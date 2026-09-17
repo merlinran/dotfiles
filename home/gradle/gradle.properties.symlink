@@ -1,0 +1,8 @@
+org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=512m
+kotlin.daemon.jvmargs=-Xmx2g
+
+# org.gradle.jvmargs=--illegal-access=permit
+# protoc_platform=osx-x86_64
+
+# Stop the Gradle daemon after 10 minutes idle (milliseconds)
+org.gradle.daemon.idletimeout=600000
