@@ -1,0 +1,3 @@
+#!/bin/zsh
+# pi with Z.AI GLM Coding Plan API
+_pi_provider PIG "$@"

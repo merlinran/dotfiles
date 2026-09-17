@@ -6,6 +6,7 @@
 # PREFIX is one of:
 #   PIK - Kimi For Coding
 #   PID - DeepSeek
+#   PIG - Z.AI GLM Coding Plan
 #
 # API keys are read from ~/.config/claude/providers.env (shared with claude/codex).
 
@@ -26,9 +27,15 @@ case "$prefix" in
     ;;
   PID)
     provider="deepseek"
-    model="deepseek-v4-pro"
+    model="deepseek-flash"
     env_var="DEEPSEEK_API_KEY"
     api_key=$(grep '^CCD_ANTHROPIC_AUTH_TOKEN=' "$config_file" | cut -d'=' -f2-)
+    ;;
+  PIG)
+    provider="zai"
+    model="glm-5.3"
+    env_var="ZAI_API_KEY"
+    api_key=$(grep '^CCG_ANTHROPIC_AUTH_TOKEN=' "$config_file" | cut -d'=' -f2-)
     ;;
   *)
     echo "Unknown prefix: $prefix" >&2
