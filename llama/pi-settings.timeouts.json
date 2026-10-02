@@ -1,0 +1,35 @@
+{
+  "_comment": [
+    "Timeout settings required for local inference. Merge these two keys into",
+    "~/.pi/agent/settings.json.",
+    "",
+    "settings.json is deliberately NOT tracked by the dotfiles repo (see the",
+    "home/pi/ rule in .gitignore) because Pi rewrites it constantly. It lives",
+    "here as a documented snippet instead.",
+    "",
+    "Both Pi and Raft read this file, because raft-computer's runtime resolves",
+    "its agent dir to ~/.pi/agent. So these values cover local Raft agents too.",
+    "",
+    "retry.provider.timeoutMs: 1800000 (30 min)",
+    "  A cold 128K-token prefill measures ~380s on this machine, and with the",
+    "  server running two slots an agent can additionally queue behind another",
+    "  agent's generation. The default aborted queued requests, which is what",
+    "  surfaced as Raft's 'Model service request failed (custom)' errors.",
+    "",
+    "httpIdleTimeoutMs: 0 (disabled; default is 300000 = 5 min)",
+    "  This is a header/body idle timeout. A long prefill streams NOTHING until",
+    "  it finishes, so the 5-minute default can kill valid work mid-prefill.",
+    "  The provider timeout above remains the backstop, so disabling this does",
+    "  not mean a hung request waits forever.",
+    "",
+    "Deliberately not set: retry.provider.maxRetries. Pi's docs warn that",
+    "raising it lets SDK-level retries intercept out-of-quota errors before Pi",
+    "sees them, which can block an agent until the quota resets."
+  ],
+  "retry": {
+    "provider": {
+      "timeoutMs": 1800000
+    }
+  },
+  "httpIdleTimeoutMs": 0
+}

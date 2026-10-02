@@ -5,5 +5,14 @@ Brewfile.lock.json
 .gitconfig.local
 .local.zsh
 
-# Pi agent settings change frequently; manage locally
-home/pi/
+# Pi agent state churns frequently (sessions, auth, npm cache); manage it locally.
+# The few files we deliberately manage are re-included explicitly below.
+# Note: `home/pi/` is NOT used as an ignore pattern, because git cannot
+# re-include a file whose parent directory is excluded.
+home/pi/*
+!home/pi/agent/
+home/pi/agent/*
+!home/pi/agent/models.json.symlink
+!home/pi/agent/extensions/
+home/pi/agent/extensions/*
+!home/pi/agent/extensions/local-web-guidance.ts.symlink

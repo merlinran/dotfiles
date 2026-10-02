@@ -1,0 +1,79 @@
+/**
+ * Scope web-tool usage guidance to the local model only.
+ *
+ * Why this exists: the local Qwen3.6 35B-A3B intermittently confuses the two
+ * index spaces of `get_search_content`. It wants the content of an individual
+ * source and passes that as `queryIndex`, which actually indexes only the
+ * user's 2-3 search queries. Observed in real sessions:
+ *
+ *   web_search (3 queries) -> get_search_content queryIndex=3  -> out of range
+ *                          -> get_search_content queryIndex=8  -> out of range
+ *                          -> get_search_content queryIndex=9  -> out of range
+ *                          -> fetch_content(url) (recovers)
+ *
+ * The tool's own guidance is correct ("repeat with queryIndex 1 through 2") and
+ * the error messages are excellent, so this is a model limitation, not a tool
+ * bug. Frontier models do not need the help.
+ *
+ * Putting this text in ~/.pi/agent/APPEND_SYSTEM.md would fix it too, but that
+ * taxes every request of every model -- including hosted ones that never make
+ * the mistake -- for ~255 tokens each time. So instead it is appended only when
+ * the active provider is local, via the model_select / before_agent_start pair.
+ */
+
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { appendFileSync } from "node:fs";
+
+function debug(line: string) {
+  const path = process.env.PI_LOCAL_GUIDANCE_DEBUG;
+  if (path) appendFileSync(path, `${new Date().toISOString()} ${line}\n`);
+}
+
+/** Providers that need the extra scaffolding. */
+const LOCAL_PROVIDERS = new Set(["llama-local"]);
+
+/** Marker used to avoid appending twice if handlers chain. */
+const MARKER = "## Web search vs. source retrieval";
+
+const GUIDANCE = `
+${MARKER}
+
+\`web_search\` and \`fetch_content\` each return a \`responseId\` for stored
+content. The two kinds of \`responseId\` support different parameters, and mixing
+them up wastes turns:
+
+- A **search** responseId (from \`web_search\`) supports only \`queryIndex\` and
+  \`query\`. \`queryIndex\` selects one of *the queries you sent* -- it ranges from
+  \`0\` to \`number_of_queries - 1\`, usually 0-2. It is **not** a source index. A
+  search responseId has no per-source index.
+- A **fetch** responseId (from \`fetch_content\`) supports \`urlIndex\` and \`url\`.
+  \`urlIndex\` ranges over the URLs that were fetched.
+
+So \`urlIndex\` and \`url\` do not work with a search responseId, and \`queryIndex\`
+does not address individual search sources.
+
+To read the full text of a specific source that \`web_search\` found, call
+\`fetch_content\` with that source's URL. To read the stored search results
+themselves, call \`get_search_content\` with \`queryIndex\`.
+`.trim();
+
+export default function (pi: ExtensionAPI) {
+  pi.on("before_agent_start", async (event, ctx) => {
+    // ctx.model is the authoritative current model and is populated in every
+    // mode. Tracking model_select instead does not work: it does not fire for
+    // non-interactive runs (-p), leaving the provider unknown and silently
+    // disabling this extension.
+    const provider = ctx.model?.provider;
+
+    if (!provider || !LOCAL_PROVIDERS.has(provider)) {
+      debug(`skip provider=${provider ?? "unknown"}`);
+      return;
+    }
+    if (event.systemPrompt.includes(MARKER)) {
+      debug("skip already-present");
+      return;
+    }
+    debug(`APPEND provider=${provider} model=${ctx.model?.id ?? "?"}`);
+    return { systemPrompt: `${event.systemPrompt}\n\n${GUIDANCE}` };
+  });
+}

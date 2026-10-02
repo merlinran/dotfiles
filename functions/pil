@@ -1,0 +1,17 @@
+#!/bin/zsh
+# pi with the local llama.cpp server (Qwen3.6 35B-A3B).
+#
+# No API key lookup -- the local server ignores auth. Start the server first
+# with `llama-start`; see llama/README.md.
+#
+# Local inference is opt-in: the global defaultProvider stays on cursor.
+
+if ! curl -sf --max-time 2 "http://127.0.0.1:8080/health" >/dev/null; then
+  print -u2 "pil: llama-server is not running. Start it with: llama-start"
+  return 1
+fi
+
+/opt/homebrew/bin/pi \
+  --provider llama-local \
+  --model qwen3.6-35b-a3b \
+  "$@"
