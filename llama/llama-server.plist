@@ -4,8 +4,13 @@
   Template. llama/install.sh substitutes __HOME__ and __MODEL__ and installs
   the result to ~/Library/LaunchAgents/local.llama-server.plist.
 
-  Single-model mode: one model, one slot, deterministic start. To swap models,
-  change the --model path here and run `llama-restart` (or `script/install`).
+  Single-model mode: one model, deterministic start. To swap models, change the
+  --model path here and run `llama-restart` (or `script/install`).
+
+  Slot KV save/restore lives in llama.zsh (llama-save/llama-restore, called by
+  llama-stop/llama-start) rather than in a wrapper process: a wrapper that
+  traps SIGTERM fights launchd's own stop handling and made llama-server abort
+  in ggml-metal teardown. --slot-save-path is passed below.
 -->
 <plist version="1.0">
 <dict>
@@ -93,6 +98,11 @@
         <string>draft-mtp</string>
         <string>--spec-draft-n-max</string>
         <string>2</string>
+
+        <!-- Slot KV save/restore (llama-save/llama-restore). State lives under
+             ~/.local/state/llama/slots and is not part of the model. -->
+        <string>--slot-save-path</string>
+        <string>__HOME__/.local/state/llama/slots</string>
 
         <string>--host</string>
         <string>127.0.0.1</string>

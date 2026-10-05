@@ -1,4 +1,5 @@
 home/gitconfig.local.symlink
+.wrangler/
 Brewfile.lock.json
 .codex
 .localrc

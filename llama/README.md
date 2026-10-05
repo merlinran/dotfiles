@@ -377,7 +377,7 @@ Config lives in [`llama-server.plist`](./llama-server.plist);
 | `--kv-unified` | One shared KV pool across slots. Without it, `-c` is split per slot and each agent gets only `131072/n_parallel`. |
 | `--kv-unified-per-slot 131072` | Full 128K per agent. Pool = `n_parallel * this`. |
 | `--cache-ram 12288` | RAM budget for non-resident slot states. Must exceed one prompt state (~9.3 GB at 128K) or reuse silently breaks. |
-| `-np 1` | One slot for one agent, so the conversation KV persists across turns. |
+| `--slot-save-path` | Where `llama-save`/`llama-restore` put slot KV state. `llama-stop`/`llama-start` call them. See "Warm start" below. |
 | `--cache-reuse 256` | Intended to reuse KV chunks when the prefix shifts. **Measured no benefit** in shift/insertion tests; see below. |
 | `-ctk q8_0 -ctv q8_0` | Halves KV memory at negligible quality cost. |
 | `--spec-type draft-mtp --spec-draft-n-max 2` | MTP speculative decoding, ~28-59% faster generation. |
@@ -425,15 +425,91 @@ What this means practically:
 processing on this machine. Prefill is the dominant cost, so for agent work it is
 worth leaving on while plugged in.
 
+### Warm start: slot state across restarts
+
+Prefix caching is per-process, so a restart normally throws away every warm
+context. At 90–100K tokens a cold prefill is ~380s. Worse, concurrent cold
+prefills starve each other: with a single 98K prefill in flight, a trivial
+request measured **2.1 tok/s** and a 14s TTFT. The log bears this out — **84% of
+all prompt tokens went to just 127 requests >10K**, while 87.5% of turns were
+already warm (<1K prefilled).
+
+So slot KV is saved to disk around restarts, with `--slot-save-path` pointing at
+`~/.local/state/llama/slots` (in the plist):
+
+- **`llama-stop`** saves every idle, non-empty slot to `slot-<id>.bin` *before*
+  `launchctl bootout`, while the server is still up. Busy slots are skipped, so
+  a save can never stall a stop. `llama-restart` calls `llama-stop` first, so
+  both manual restarts and `brew upgrade llama.cpp` save.
+- **`llama-start`** restores the files after `/health` comes up.
+- `llama-save` / `llama-restore` do either half by hand.
+
+There is deliberately **no wrapper process**. One was tried first: a script that
+trapped SIGTERM to save, then ran the server. It fought launchd — launchd
+SIGKILLed it mid-save after its ~20s default (orphaning `llama-server`), and
+with `ExitTimeOut` raised, llama-server received launchd's group SIGTERM *and*
+the wrapper's forwarded one, aborting in ggml-metal teardown
+(`GGML_ASSERT([rsets->data count] == 0)`). Saving explicitly before `bootout`
+is simpler and has neither problem.
+
+The trade-off: a **reboot or logout cold-starts**, because launchd stops the job
+without running `llama-stop`. Reboots are rare, so this is accepted; if it ever
+matters, a periodic saver job is the way to cover it.
+
+Measured disk cost is modest: ~11–19 KB/token, so ~1.5–2.4 GB for a full 128K
+slot, not the ~9 GB of the in-RAM prompt cache entry.
+
+#### It does not actually work on this model yet (upstream bug)
+
+This is the important caveat, verified on this machine, not assumed:
+
+`Qwen3.6-35B-A3B` is a **hybrid SSM + attention** model (`qwen35moe`: the GGUF
+carries `ssm.state_size`, `ssm.conv_kernel`, `ssm.group_count`, and
+`full_attention_interval = 4`). A recurrent state cannot be rewound, so reuse
+across a prefix boundary requires a **context checkpoint**, not just the KV.
+llama-server's on-disk save/restore does not persist `slot.prompt.checkpoints`,
+and restore clears them, so the next request always hits "forcing full prompt
+re-processing due to lack of cache data".
+
+Measured here after a real restart + restore:
+
+```
+slot get_availabl: selected slot by LCP similarity, f_sim_best = 1.000, f_keep = 1.000
+slot print_timing: prompt eval time = 9783.92 ms / 7632 tokens   <- full re-prefill
+slot print_timing: graphs reused = 0
+```
+
+Restore reports success and `/slots` shows the right token count, but `cache_n`
+is **0** — the feature is worth exactly nothing on this model. This is upstream
+[ggml-org/llama.cpp#25913](https://github.com/ggml-org/llama.cpp/issues/25913),
+reported against this same model and confirmed by ~10 users across backends. The
+fix is [PR #26004](https://github.com/ggml-org/llama.cpp/pull/26004) (open at the
+time of writing), which appends checkpoint blobs to the save file.
+
+Homebrew's `llama.cpp 0.5.0` (build 11146, commit `7fe450e9`) does **not**
+contain it. Until the server is built from a commit that does, the save is dead
+weight (~seconds and a few GB per stop): drop `--slot-save-path` from the plist,
+or do not call `llama-save`, to skip it. The plumbing is kept so it starts
+working the moment llama.cpp is upgraded.
+
+Other caveats, independent of the above:
+
+- Save files are backend-specific and only portable within a build; a
+  llama.cpp upgrade that changes the format makes restore fail, which is logged
+  and treated as a cold start.
+- A hard power loss skips the save. Use `llama-save` before that if it matters.
+
 ## Commands
 
 Defined in `llama.zsh`, available in every new shell:
 
 ```
-llama-start      # load the agent and wait for /health
-llama-stop       # fully unload (frees ~27GB for Xcode/Android builds)
-llama-restart    # reload after editing the plist or swapping models
-llama-status     # pid, resident memory, loaded models
+llama-start      # load the agent, restore slot state, wait until ready
+llama-stop       # save slot state, then fully unload (frees ~27GB)
+llama-restart    # save, reload, restore; use after editing the plist
+llama-status     # pid, resident memory, loaded models, saved state
+llama-save       # snapshot slot KV state now
+llama-restore    # restore slot KV state now
 llama-logs       # tail the server log
 llama-ctx        # dump /props (context and server settings)
 ```
