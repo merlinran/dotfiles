@@ -53,10 +53,11 @@ which is what makes `--spec-type draft-mtp` do anything.
 | Reserved for macOS + Xcode/Android builds | ~16 |
 | Available for model + KV | ~48 |
 | Weights (Q5_K_XL) | 27.2 |
-| KV pool, 5 x 128K tokens, q8_0 | ~17 |
 | Compute buffers | ~1-2 |
 
-Measured with the current config (5 slots x 128K, unified KV, cache-ram 12288):
+Current KV capacity is **262144 tokens** (2 x 128K, q8_0).
+
+Historical measurements with the previous config (5 slots x 128K, unified KV, cache-ram 12288):
 
 | | GB |
 |---|---|
@@ -64,7 +65,7 @@ Measured with the current config (5 slots x 128K, unified KV, cache-ram 12288):
 | Wired (GPU weights + committed KV pool) | **44.2** |
 | Readily available (free + inactive + purgeable + speculative) | **13.1** |
 
-The KV pool is committed at load, not grown as contexts fill. Startup logs
+The KV pool is committed at load, not grown as contexts fill. Historical startup logs
 `--kv-unified-per-slot: sizing KV pool to n_parallel * kv_unified_per_slot =
 5 * 131072 = 655360`, and wired was **44.6 GB at idle and 44.6 GB under a 5-way
 concurrent load** — flat. So filling contexts does not move the needle; slot
@@ -79,9 +80,10 @@ Cost is ~2.8 GB of available memory per slot:
 | 4 | ~16.0 GB (interpolated) |
 | 5 | 13.1 GB (measured) |
 
-At 5 slots, 13 GB available is workable alongside Xcode/Android builds but is
-thinner than the ~16 GB this setup otherwise targets. Drop to 4 if builds start
-swapping.
+The current default is **2 slots**, one for each local-model Raft agent. Use 3
+if an interactive Pi client needs simultaneous inference. On 2026-10-06 the
+five-slot configuration had 41.5 GiB wired, 12.8 GiB compressed, and 9.1 GiB
+swap used system-wide; excess slot allocation was not free on this workload.
 
 Note `ps -o rss` overstates the process: it counts the 27 GB mmap'd GGUF as
 resident (`footprint -p <pid>` reports ~6 GB phys_footprint). The wired figure is
@@ -128,6 +130,49 @@ Reproduce with:
 llama-restart                  # clear KV so the cold number is honest
 ./llama/benchmark.py --tokens 31000
 ```
+
+### 2026-10-06: two-agent tuning
+
+Installed `--parallel 2 --no-cache-idle-slots`, retaining 128K context per
+slot, Q8 KV, Q5 weights, MTP draft length 2, and batch/ubatch 2048/512.
+The server reported two 131072-token slots and a 262144-token unified pool.
+
+Disabling idle-slot eviction keeps the other conversation resident when one
+agent starts a request. In build 11146, `tools/server/server-context.cpp`
+saves and clears other idle slots after launching a task by default; the
+switch skips that loop. LRU replacement can still save/load displaced prompts
+through the RAM cache. This is useful when the KV pool already budgets a full
+context for each recurring conversation.
+
+Focused validation used two concurrent native `/completion` requests pinned
+to slots 0/1, approximately 3.3K synthetic code tokens each, temperature 0,
+128 generated tokens with EOS ignored, then each actual output plus a short
+follow-up appended to its prompt:
+
+| Final warm follow-up | Slot 0 | Slot 1 |
+|---|---|---|
+| Cached tokens | 3399 | 3399 |
+| Newly prefilled tokens | 9 | 9 |
+| Prompt processing | 211 ms | 208 ms |
+| Decode | 32.8 tok/s | 25.9 tok/s |
+| Request wall time | 4.10 s | 5.12 s |
+
+Both warm requests completed in 5.12 seconds overall. With idle eviction
+still enabled, one pinned warm request in each preliminary run had to
+reprocess its full prompt. Pinning bypasses some automatic slot selection,
+so this establishes resident-prefix reuse, not a general cache-hit benchmark.
+
+Raft traffic overlapped these tests, including a cold 66K prompt that severely
+stalled another stream. **Do not interpret the runs as a controlled throughput
+speedup.** MTP length and microbatch sweeps remain unmeasured; keep their
+existing values rather than choosing a winner from contended timings.
+
+System-wide wired memory changed from 41.5 GiB before tuning to 33.2 GiB after
+validation; free memory was then 15.5 GiB and compressed memory 1.7 GiB. These
+are snapshots affected by the restart and cache contents, not isolated KV
+allocation measurements. The live Raft conversation resumed at approximately
+67.6K tokens after validation. The default remains two slots; a third is an
+explicit capacity/memory trade-off for another simultaneous client.
 
 ### Diagnosing it yourself
 
@@ -193,8 +238,28 @@ curl -s localhost:8080/v1/chat/completions -H 'Content-Type: application/json' \
        "chat_template_kwargs":{"enable_thinking":false}}'
 ```
 
-Pi drives this through the `compat.thinkingFormat: "qwen-chat-template"` setting
-in `models.json.symlink`, so `--thinking off|low|high` works as usual.
+Pi drives this through `compat.thinkingFormat: "qwen-chat-template"` in
+`models.json.symlink`. **This is binary control, not graded effort:** `off`
+sends `enable_thinking: false`; `low`, `medium`, and `high` all send
+`enable_thinking: true`. The latter three produce identical request payloads
+for identical context, with the same 8192-token output cap and no reasoning
+budget. Verified by intercepting payloads from the installed Pi 1.0.1 adapter
+before network dispatch on 2026-10-06. Raising low to high therefore does not
+instruct this local model to reason longer or improve its quality.
+
+The two most recently active interactive Pi sessions confirm the distinction:
+`01a10b09-e1b3-7193-851e-7745b23cf4d8` was set to high;
+`01a10b11-00f6-7326-bf50-bc4e7c2879da` was set to low. Both repeated the same
+simple question. Their latest turns took 18.37s/17.04s and generated 183/315
+tokens respectively. These include queue/prefill/decode time and different
+conversation histories; they are not a controlled quality or throughput test.
+The sessions contain thinking blocks even though their usage.reasoning field
+is zero, so that field alone cannot establish whether thinking occurred.
+
+Actual graduated limits would require mapping Pi levels to llama.cpp's
+`reasoning_budget_tokens` (also accepted as `thinking_budget_tokens`). Merely
+enabling `supportsReasoningEffort` does not establish a model-specific budget.
+No such mapping is currently configured.
 
 ## Raft Computer
 
@@ -233,12 +298,14 @@ local context. **Neither 128K nor any setting on this machine will fit a 528K
 token request** (that is roughly 300GB of KV). Long-lived Raft sessions must be
 reset or archived before a local model can drive them.
 
-**2. Concurrency, timeouts, and queueing.** Raft runs up to 5 agents
-concurrently (`max=5`; `active=3` observed) and its provider timeout defaults to
-the SDK value. The server runs **5 slots**, matching Raft's limit, so agents
-normally do not queue at all.
+**2. Concurrency, timeouts, and queueing.** Raft's `Start queued ... max=5`
+limits concurrent **agent startups**, not running agents or model requests.
+`packages/daemon/src/agentProcessManager.ts` releases the startup slot when
+`startAgentNow` resolves (`spawn attempted`). Do not size inference slots from
+that log field. The server runs **2 slots** for the two local-model agents;
+additional simultaneous model requests queue until a slot becomes available.
 
-That combination originally produced repeated failures:
+The original single-slot configuration produced repeated failures:
 
 ```
 "providerId":"custom","phase":"failed"        <- no httpStatus
@@ -252,8 +319,8 @@ local-only.
 
 Two fixes, both needed:
 
-- **Slots** raised progressively as the bottleneck moved. 5 now, matching
-  Raft's `max=5`.
+- **Slots**: two allow both local-model agents to infer simultaneously. Five
+  were previously configured based on the mistaken startup-limit interpretation.
 - **Timeouts** in `~/.pi/agent/settings.json` — see
   [`pi-settings.timeouts.json`](./pi-settings.timeouts.json). `raft-computer`
   resolves its agent dir to `~/.pi/agent`, so Raft agents read this file too.
@@ -270,7 +337,7 @@ Verified: 3 concurrent requests completed in 155s total — the *slowest* reques
 not the sum (366s). Two slots are observable processing simultaneously, with zero
 client cancels.
 
-### Slots cost memory, not speed
+### Idle slots cost memory; active concurrency affects latency
 
 Measured with only `-np` varied, 3 runs each:
 
@@ -282,12 +349,14 @@ Measured with only `-np` varied, 3 runs each:
 
 1 to 3 slots costs **2.5%** on a single agent, and speculative decoding is
 untouched (identical draft acceptance at every slot count — worth checking,
-because batching can disable speculation). So raise `--parallel` freely until
-memory says stop. Do not raise it expecting per-agent speed.
+because batching can disable speculation). Size `--parallel` for actual local
+inference demand and memory headroom, not the number of configured providers.
+Do not raise it expecting per-agent speed.
 
-What *does* degrade is simultaneous use. Aggregate decode is flat because it is
-memory-bandwidth-bound — the weights get read once per token regardless of batch
-size — so per-stream decode divides by concurrency:
+What *does* degrade in these measurements is simultaneous use. Aggregate
+decode was roughly flat, so per-stream throughput fell with concurrency. This
+is an observation for this model/backend/workload, not a general batching law;
+batching can reuse weights, and MoE routing and speculation affect the result:
 
 | Concurrent streams | Aggregate | Per-stream |
 |---|---|---|
@@ -373,12 +442,13 @@ Config lives in [`llama-server.plist`](./llama-server.plist);
 |---|---|
 | `-ngl 999` | Offload every layer to the GPU. |
 | `-fa on` | Flash attention — required for the KV savings to be real. |
-| `--parallel 5` | Matches Raft's concurrent-agent limit so agents rarely queue. Costs ~2.8 GB available memory per slot, and essentially no speed. |
+| `--parallel 2` | Two local-model agents can infer concurrently; add a third only for another simultaneous client. Idle slots still allocate KV memory. |
 | `--kv-unified` | One shared KV pool across slots. Without it, `-c` is split per slot and each agent gets only `131072/n_parallel`. |
 | `--kv-unified-per-slot 131072` | Full 128K per agent. Pool = `n_parallel * this`. |
-| `--cache-ram 12288` | RAM budget for non-resident slot states. Must exceed one prompt state (~9.3 GB at 128K) or reuse silently breaks. |
+| `--cache-ram 12288` | RAM budget for displaced slot states; large hybrid states can exceed the 8 GiB default. |
+| `--no-cache-idle-slots` | Keep both recurring conversations resident instead of saving and clearing other idle slots on each request. LRU displacement can still use the RAM cache. |
 | `--slot-save-path` | Where `llama-save`/`llama-restore` put slot KV state. `llama-stop`/`llama-start` call them. See "Warm start" below. |
-| `--cache-reuse 256` | Intended to reuse KV chunks when the prefix shifts. **Measured no benefit** in shift/insertion tests; see below. |
+| `--cache-reuse 256` (not enabled) | **Measured no benefit** in shift/insertion tests; see below. |
 | `-ctk q8_0 -ctv q8_0` | Halves KV memory at negligible quality cost. |
 | `--spec-type draft-mtp --spec-draft-n-max 2` | MTP speculative decoding, ~28-59% faster generation. |
 
@@ -406,8 +476,7 @@ is easy to misdiagnose as caching being broken; it is not, it is the definition
 of a prefix cache.
 
 `--cache-reuse 256` was tried and made **no measurable difference** in any of the
-shift/insertion cases above. It is retained in the plist but should not be relied
-on.
+shift/insertion cases above. It is not enabled in the plist and should not be relied on.
 
 What this means practically:
 
@@ -421,9 +490,9 @@ What this means practically:
 - `@hk_net/pi-timestamp` was checked and is safe (display-only, never enters the
   prompt) — see below.
 
-**High Power Mode** (System Settings → Battery) roughly doubles prompt
-processing on this machine. Prefill is the dominant cost, so for agent work it is
-worth leaving on while plugged in.
+**High Power Mode** (System Settings → Battery) is a candidate to benchmark
+while plugged in. The earlier claimed 2x prefill improvement is not supported
+by a controlled comparison here; do not assume that multiplier.
 
 ### Warm start: slot state across restarts
 

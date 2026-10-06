@@ -150,8 +150,6 @@
 [merge "mergiraf"]
 	name = mergiraf
 	driver = mergiraf merge --git %O %A %B -s %S -x %X -y %Y -p %P -l %L
-[diff]
-	external = difft
 [credential "https://github.com"]
 	helper = 
 	helper = !/opt/homebrew/bin/gh auth git-credential

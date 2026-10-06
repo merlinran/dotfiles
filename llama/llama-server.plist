@@ -32,50 +32,26 @@
         <string>--flash-attn</string>
         <string>on</string>
 
-        <!-- Concurrency. Raft runs up to 5 agents concurrently and its provider
-             timeout is 60s. With a single slot they serialised: one agent's long
-             generation (observed 1956 tokens at ~17.7 tok/s = 110s) exceeded the
-             timeout, so every other agent failed with "Model service request
-             failed (custom)". The server log showed clients giving up:
-                 stop: cancel task, id_task = 39014 ...
-
-             Five slots to match Raft's concurrent-agent limit (max=5), so
-             agents queue only under genuinely heavy load. Unified KV shares one
-             pool sized n_parallel * per-slot = 5 * 131072 = 655360 tokens, the
-             largest KV pool here -- verify wired memory after changing it.
-
-             Measured cost of extra slots is memory, not speed: single-stream
-             decode 70.7 -> 69.4 -> 68.9 tok/s for -np 1/2/3, with MTP draft
-             acceptance unchanged at 0.71698. So raise this freely until memory
-             says stop; do not raise it expecting per-agent speed.
-
-             What does degrade is simultaneous use: aggregate decode is flat
-             (bandwidth-bound), so per-stream decode divides by concurrency.
-             Prefill is compute-bound and batches well, so overall turn latency
-             still improves. Keep models.json contextWindow in sync with the
-             per-slot value below. -->
+        <!-- Two inference slots for the two local-model Raft agents. Raft's
+             max=5 log field limits concurrent agent STARTUPS, not running
+             sessions or inference requests. It is not a slot-sizing target.
+             Use 3 slots if an interactive Pi client also needs concurrent
+             inference. Idle slots still cost allocated KV memory.
+             Keep models.json contextWindow in sync with the per-slot limit. -->
         <string>--parallel</string>
-        <string>5</string>
+        <string>2</string>
         <string>--kv-unified</string>
         <string>--kv-unified-per-slot</string>
         <string>131072</string>
 
-        <!-- Unified KV keeps a RAM budget for slot states that are not currently
-             resident, so a conversation that waits for a slot can resume without
-             re-prefilling its whole context.
-
-             The 8192 MiB default was actively harmful here and had to be raised:
-             a 128K-context prompt state measured 9.3 GB, so llama.cpp logged
-             "prompt state size 9298 MiB exceeds cache size limit 8192 MiB,
-             skipping" and silently dropped it, defeating multi-conversation
-             reuse entirely.
-
-             12288 (12 GB) is the smallest value that clears a single 9.3 GB
-             state with headroom. Measured headroom with this config is 20.8 GB
-             readily available (free + inactive + purgeable + speculative)
-             against a 36.1 GB wired floor, so a 16 GB cache would leave too
-             little for macOS plus Xcode/Android builds. Raise only after
-             re-measuring headroom. -->
+        <!-- RAM prompt cache for displaced conversations. A 128K hybrid
+             prompt state can exceed 9 GiB, so the 8 GiB default cannot retain
+             one. Keep 12 GiB as a cap, not a reservation; avoid increasing it
+             on this 64 GiB machine without measuring memory pressure. -->
+        <!-- Keep recurring conversations in their resident slots rather than
+             saving/clearing every other idle slot on each new request. The KV
+             pool already budgets a full context for both agents. -->
+        <string>--no-cache-idle-slots</string>
         <string>--cache-ram</string>
         <string>12288</string>
 
