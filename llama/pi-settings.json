@@ -1,6 +1,6 @@
 {
   "_comment": [
-    "Timeout settings required for local inference. Merge these two keys into",
+    "Settings required for local inference. Merge these keys into",
     "~/.pi/agent/settings.json.",
     "",
     "settings.json is deliberately NOT tracked by the dotfiles repo (see the",
@@ -9,6 +9,15 @@
     "",
     "Both Pi and Raft read this file, because raft-computer's runtime resolves",
     "its agent dir to ~/.pi/agent. So these values cover local Raft agents too.",
+    "",
+    "extensions: [\"-builtin:llama.cpp\"]",
+    "  Disable Pi's built-in llama.cpp provider. That provider speaks the",
+    "  llama.cpp ROUTER protocol (/models with per-model status), but this",
+    "  machine serves a single model in single-model mode, so every catalog",
+    "  refresh failed with 'Could not refresh llama.cpp; showing cached models'",
+    "  in /model. Pi only tries because LLAMA_BASE_URL is exported, which its",
+    "  provider uses for auto-configuration. Local inference goes through the",
+    "  custom 'llama-local' provider in models.json instead.",
     "",
     "retry.provider.timeoutMs: 1800000 (30 min)",
     "  A cold 128K-token prefill measures ~380s on this machine, and with the",
@@ -25,6 +34,9 @@
     "Deliberately not set: retry.provider.maxRetries. Pi's docs warn that",
     "raising it lets SDK-level retries intercept out-of-quota errors before Pi",
     "sees them, which can block an agent until the quota resets."
+  ],
+  "extensions": [
+    "-builtin:llama.cpp"
   ],
   "retry": {
     "provider": {

@@ -322,7 +322,7 @@ Two fixes, both needed:
 - **Slots**: two allow both local-model agents to infer simultaneously. Five
   were previously configured based on the mistaken startup-limit interpretation.
 - **Timeouts** in `~/.pi/agent/settings.json` — see
-  [`pi-settings.timeouts.json`](./pi-settings.timeouts.json). `raft-computer`
+  [`pi-settings.json`](./pi-settings.json). `raft-computer`
   resolves its agent dir to `~/.pi/agent`, so Raft agents read this file too.
   `retry.provider.timeoutMs` 30 min covers a cold 128K prefill (~380s) plus
   queueing; `httpIdleTimeoutMs` is disabled because a long prefill streams
@@ -600,6 +600,13 @@ pil              # pi against the local model (see functions/pil)
 `defaultProvider` in `settings.json` is deliberately left on `cursor`, so local
 inference is always an explicit choice.
 
+Pi's built-in `llama.cpp` provider must stay disabled (`extensions:
+["-builtin:llama.cpp"]` in `settings.json`). It speaks the llama.cpp *router*
+protocol, but this machine runs single-model mode, and because `LLAMA_BASE_URL`
+is exported Pi auto-configures it anyway. The result was a failing network
+refresh in `/model`: `Could not refresh llama.cpp; showing cached models.`
+Local inference goes through the `llama-local` provider above instead.
+
 ## Swapping models
 
 1. Download it (see below).
@@ -661,11 +668,12 @@ llama-start
 pil
 ```
 
-One manual step: merge [`pi-settings.timeouts.json`](./pi-settings.timeouts.json)
+One manual step: merge [`pi-settings.json`](./pi-settings.json)
 into `~/.pi/agent/settings.json`. It is not symlinked because `~/.pi/agent/settings.json`
 is deliberately untracked (Pi rewrites it constantly — see the `home/pi/` rule in
-`.gitignore`). Without those two timeout keys, local Raft agents fail the moment
-they have to queue for a slot.
+`.gitignore`). Without the two timeout keys, local Raft agents fail the moment
+they have to queue for a slot; without `-builtin:llama.cpp`, `/model` reports a
+spurious `llama.cpp` refresh failure on every open.
 
 ### Known-unfixable
 

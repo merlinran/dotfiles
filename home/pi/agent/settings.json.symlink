@@ -1,0 +1,33 @@
+{
+  "lastChangelogVersion": "1.0.1",
+  "theme": "dark",
+  "extensions": [
+    "-builtin:llama.cpp"
+  ],
+  "packages": [
+    "git:github.com/merlinran/superpowers",
+    "git:github.com/merlinran/pi-superagents",
+    "npm:@hk_net/pi-timestamp",
+    "npm:pi-web-access"
+  ],
+  "defaultProvider": "llama-local",
+  "defaultModel": "llama-local/qwen3.6-35b-a3b",
+  "enabledModels": [
+    "llama-local/qwen3.6-35b-a3b",
+    "deepseek/deepseek-flash",
+    "zai/glm-5.3",
+    "zai/glm-5.3-flash",
+    "deepseek-glm/on-peak"
+  ],
+  "defaultThinkingLevel": "low",
+  "hideThinkingBlock": false,
+  "retry": {
+    "provider": {
+      "timeoutMs": 1800000
+    }
+  },
+  "httpIdleTimeoutMs": 0,
+  "terminal": {
+    "showTerminalProgress": true
+  }
+}

@@ -14,6 +14,8 @@ home/pi/*
 !home/pi/agent/
 home/pi/agent/*
 !home/pi/agent/models.json.symlink
+!home/pi/agent/settings.json.symlink
 !home/pi/agent/extensions/
 home/pi/agent/extensions/*
 !home/pi/agent/extensions/local-web-guidance.ts.symlink
+!home/pi/agent/extensions/glm-deepseek-fallback.ts.symlink
