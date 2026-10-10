@@ -29,14 +29,14 @@ interface State {
 }
 
 /**
- * 01:00–04:00 UTC = 09:00–12:00 SGT, Mon–Fri.
+ * 00:00–10:00 UTC = 08:00–18:00 SGT, Mon–Fri.
  * Only time DeepSeek is peak while GLM is off-peak.
  */
 function useGlm(): boolean {
 	const d = new Date();
 	const day = d.getUTCDay();
 	if (day === 0 || day === 6) return false;
-	return d.getUTCHours() >= 1 && d.getUTCHours() < 4;
+	return d.getUTCHours() >= 0 && d.getUTCHours() < 10;
 }
 
 function find(ctx: ExtensionContext, p: "zai" | "deepseek", id: string) {
@@ -64,7 +64,7 @@ export default function (pi: ExtensionAPI) {
 	pi.registerVirtualModel<State>({
 		provider: "deepseek-glm",
 		id: "on-peak",
-		name: "DeepSeek (+ GLM 09–12 SGT)",
+		name: "DeepSeek (+ GLM 08–18 SGT)",
 		thinkingLevels: ["low", "medium", "high", "xhigh"],
 		contextWindow: 1_048_576,
 		maxTokens: 384_000,
@@ -81,10 +81,15 @@ export default function (pi: ExtensionAPI) {
 				};
 			}
 
-			// Continuation: stay on previous model, detect compaction
+			// Continuation: detect compaction, re-open window mid-session
 			if (r.reason === "continuation" && r.previous) {
 				if (compacted(r.messages, s)) {
 					return { model: find(ctx, DS.provider, DS.id), state: { msgs: r.messages.length } };
+				}
+				// If currently on DeepSeek and window has opened → switch to GLM
+				// (session started outside window, but time window opened during it)
+				if (!s.glm && useGlm()) {
+					return { model: find(ctx, GLM.provider, GLM.id), state: { glm: true, msgs: r.messages.length } };
 				}
 				return { model: r.previous.model, state: { ...s, msgs: r.messages.length } };
 			}
