@@ -1,8 +1,8 @@
 /**
  * GLM / DeepSeek smart router
  *
- * Default: DeepSeek Flash. During 01:00–04:00 UTC (09:00–12:00 SGT),
- * when DeepSeek is peak but GLM is not — route to GLM.
+ * Default: DeepSeek Flash. During 00:00–10:00 UTC (08:00–18:00 SGT),
+ * route to GLM; otherwise DeepSeek.
  *
  * Once on GLM, stay through continuations. Compaction resets to DeepSeek.
  * GLM rate-limit → fall back to DeepSeek.
@@ -29,13 +29,11 @@ interface State {
 }
 
 /**
- * 00:00–10:00 UTC = 08:00–18:00 SGT, Mon–Fri.
+ * 00:00–10:00 UTC = 08:00–18:00 SGT, all days.
  * Only time DeepSeek is peak while GLM is off-peak.
  */
 function useGlm(): boolean {
 	const d = new Date();
-	const day = d.getUTCDay();
-	if (day === 0 || day === 6) return false;
 	return d.getUTCHours() >= 0 && d.getUTCHours() < 10;
 }
 
