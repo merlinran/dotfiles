@@ -27,7 +27,7 @@ done
 
 # initialize autocomplete here, otherwise functions won't be loaded
 autoload -Uz compinit
-compinit -i
+compinit -C -i
 
 autoload -U bashcompinit
 bashcompinit
@@ -70,9 +70,6 @@ bindkey "^S" history-incremental-search-forward
 export SDKMAN_DIR="$HOME/.sdkman"
 [[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
 
-export NVM_DIR="$HOME/.nvm"
-[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
-[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
 
 bindkey -r '^D'
 unset IGNOREEOF
