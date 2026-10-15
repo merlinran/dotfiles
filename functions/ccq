@@ -1,0 +1,3 @@
+#!/bin/zsh
+# Claude Code with Qianwen Pro Plan API
+_claude_provider CCQ "$@"

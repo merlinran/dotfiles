@@ -14,4 +14,5 @@ fi
 /opt/homebrew/bin/pi \
   --provider llama-local \
   --model qwen3.6-35b-a3b \
+  --models 'llama-local/*' \
   "$@"

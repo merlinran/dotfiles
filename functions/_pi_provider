@@ -7,6 +7,7 @@
 #   PIK - Kimi For Coding
 #   PID - DeepSeek
 #   PIG - Z.AI GLM Coding Plan
+#   PIQ - Qianwen Qwen Pro Plan
 #
 # API keys are read from ~/.config/claude/providers.env (shared with claude/codex).
 
@@ -37,6 +38,12 @@ case "$prefix" in
     env_var="ZAI_API_KEY"
     api_key=$(grep '^CCG_ANTHROPIC_AUTH_TOKEN=' "$config_file" | cut -d'=' -f2-)
     ;;
+  PIQ)
+    provider="qwen-pro"
+    model="qwen3.8-max"
+    env_var="QWEN_API_KEY"
+    api_key=$(grep '^CCQ_ANTHROPIC_AUTH_TOKEN=' "$config_file" | cut -d'=' -f2-)
+    ;;
   *)
     echo "Unknown prefix: $prefix" >&2
     return 1
@@ -48,4 +55,4 @@ if [[ -z "$api_key" ]]; then
   return 1
 fi
 
-env "$env_var=$api_key" "$pi_bin" --provider "$provider" --model "$model" "$@"
+env "$env_var=$api_key" "$pi_bin" --provider "$provider" --model "$model" --models "$provider/*" "$@"

@@ -1,0 +1,198 @@
+/**
+ * GLM / Qwen smart router (DeepSeek last-resort)
+ *
+ * Primary: GLM during 01:00–10:00 UTC (09:00–18:00 SGT);
+ * Qwen3.8 Flash at all other times.
+ *
+ * On a rate-limit of the primary, fail over to the other primary.
+ * DeepSeek is used only when both GLM and Qwen are rate-limited.
+ *
+ * Once switched, stay through continuations. Compaction re-evaluates.
+ * When a rate-limit window passes (parsed from 429 / Retry-After),
+ * switch back automatically on the next continuation.
+ *
+ * All in-memory, zero extra latency.
+ */
+
+import type {
+	Message,
+	ExtensionAPI,
+	ExtensionContext,
+	ModelRoute,
+	ModelRouteRequest,
+} from "@earendil-works/pi-coding-agent";
+
+const GLM  = { provider: "zai" as const, id: "glm-5.3-flash" as const };
+const QWEN = { provider: "qwen-pro" as const, id: "qwen3.8-flash" as const };
+const DS   = { provider: "deepseek" as const, id: "deepseek-flash" as const };
+
+type Which = "glm" | "qwen" | "ds";
+
+interface State {
+	/** Currently active model (sticky through continuations) */
+	active?: Which;
+	/** Message count for compaction detection */
+	msgs?: number;
+	/** Earliest time (ms) to retry GLM after rate-limit. */
+	glmRlAt?: number;
+	/** Earliest time (ms) to retry Qwen after rate-limit. */
+	qwenRlAt?: number;
+}
+
+/**
+ * 01:00–10:00 UTC = 09:00–18:00 SGT, all days.
+ * Only time DeepSeek is peak while GLM is off-peak.
+ */
+function glmWindow(): boolean {
+	const d = new Date();
+	return d.getUTCHours() >= 1 && d.getUTCHours() < 10;
+}
+
+function find(ctx: ExtensionContext, p: "zai" | "qwen-pro" | "deepseek", id: string) {
+	const m = ctx.modelRegistry.find(p, id);
+	if (!m) throw new Error(`No model: ${p}/${id}`);
+	return m;
+}
+
+/**
+ * Detect rate-limit / usage-limit / quota errors.
+ * Covers common Zai / Qwen (Alibaba) / generic error formats: HTTP 429,
+ * textual messages, and known numeric error codes.
+ */
+function isRateLimit(err: string | undefined): boolean {
+	if (!err) return false;
+	// Normalize: remove JSON formatting chars, collapse whitespace
+	const l = err.toLowerCase().replace(/[\s{}"[\]]+/g, " ");
+	return l.includes("429") || l.includes("rate limit") || l.includes("quota")
+		|| l.includes("usage limit") || l.includes("fair usage")
+		|| l.includes("too many") || l.includes("rate exceeded")
+		|| l.includes("throttling")
+		|| l.includes("1302") || l.includes("1305") || l.includes("1308")
+		|| l.includes("1310") || l.includes("1313")
+		|| l.includes("20243") || l.includes("20245");
+}
+
+/**
+ * Extract the rate-limit reset time from an error message.
+ *
+ * Zai 429s include a datetime like "2026-10-11 13:08:11" (Zai local
+ * time, UTC+8). Qwen 429s may include a numeric Retry-After (seconds).
+ * Falls back to 10 minutes if neither is found.
+ */
+function parseRetryAfter(err: string | undefined, now = Date.now()): number {
+	if (!err) return now + 10 * 60 * 1000; // default: 10 min
+
+	// Retry-After seconds: "retry-after": 120 or "retry after 120 seconds"
+	const secs = err.match(/retry[- ]after\D{0,20}(\d{1,6})/i);
+	if (secs) {
+		const t = now + parseInt(secs[1], 10) * 1000;
+		if (t > now && t - now < 8 * 24 * 3600 * 1000) return t;
+	}
+
+	// Datetime: YYYY-MM-DD HH:MM:SS (space-separated, Zai local time, UTC+8)
+	const match = err.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})/);
+	if (match) {
+		const t = Date.parse(`${match[1]}T${match[2]}+08:00`);
+		// Allow up to 8 days, so weekly limits (code 1310) are honoured.
+		if (!isNaN(t) && t > now && t - now < 8 * 24 * 3600 * 1000) {
+			return t;
+		}
+	}
+
+	// Fallback: 10 minute cooldown
+	return now + 10 * 60 * 1000;
+}
+
+/** >50% message count drop = compaction */
+function compacted(msgs: readonly Message[], s: State): boolean {
+	return (s.msgs !== undefined && s.msgs >= 5 && msgs.length < s.msgs * 0.5);
+}
+
+function usable(s: State, w: "glm" | "qwen"): boolean {
+	const rlAt = w === "glm" ? s.glmRlAt : s.qwenRlAt;
+	return rlAt === undefined || Date.now() >= rlAt;
+}
+
+/**
+ * Pick the model: primary per time window; the other primary if the
+ * primary is rate-limited; DeepSeek only when both are limited.
+ */
+function pick(s: State): Which {
+	if (glmWindow()) {
+		if (usable(s, "glm")) return "glm";
+		if (usable(s, "qwen")) return "qwen";
+	} else {
+		if (usable(s, "qwen")) return "qwen";
+		if (usable(s, "glm")) return "glm";
+	}
+	return "ds";
+}
+
+function model(ctx: ExtensionContext, w: Which) {
+	return find(ctx, w === "glm" ? GLM.provider : w === "qwen" ? QWEN.provider : DS.provider,
+		w === "glm" ? GLM.id : w === "qwen" ? QWEN.id : DS.id);
+}
+
+export default function (pi: ExtensionAPI) {
+	// Register under a custom provider ID that is always available
+	// (not tied to a real provider with credentials).
+	pi.registerVirtualModel<State>({
+		provider: "router",
+		id: "auto",
+		name: "GLM 09–18 SGT / Qwen (DS only if both limited)",
+		thinkingLevels: ["low", "medium", "high", "xhigh"],
+		contextWindow: 1_048_576,
+		maxTokens: 384_000,
+
+		route(r: ModelRouteRequest<State>, ctx: ExtensionContext): ModelRoute {
+			const s = r.state ?? {};
+
+			// User message: pick fresh (time window + active cooldowns)
+			if (r.reason === "user") {
+				const w = pick(s);
+				return { model: model(ctx, w), state: { ...s, active: w, msgs: r.messages.length } };
+			}
+
+			if (r.reason === "continuation" && r.previous) {
+				// Compaction: re-evaluate from scratch
+				if (compacted(r.messages, s)) {
+					const w = pick(s);
+					return { model: model(ctx, w), state: { msgs: r.messages.length, active: w, glmRlAt: s.glmRlAt, qwenRlAt: s.qwenRlAt } };
+				}
+				// On DeepSeek (double-limit fallback) and a primary usable again → switch back.
+				if (s.active === "ds") {
+					const w = pick(s);
+					if (w !== "ds") {
+						return { model: model(ctx, w), state: { ...s, active: w, msgs: r.messages.length } };
+					}
+				}
+				return { model: r.previous.model, state: { ...s, msgs: r.messages.length } };
+			}
+
+			// Retry: record cooldowns on rate-limit; re-pick.
+			if (r.reason === "retry" && r.failed) {
+				const fp = r.failed.model.provider;
+				const newState: State = { ...s, msgs: r.messages.length };
+				if (isRateLimit(r.failed.message.errorMessage)) {
+					const rlAt = parseRetryAfter(r.failed.message.errorMessage);
+					if (fp === GLM.provider) newState.glmRlAt = rlAt;
+					else if (fp === QWEN.provider) newState.qwenRlAt = rlAt;
+					else return { model: find(ctx, DS.provider, DS.id), state: newState }; // DS rate-limited too: just retry DS
+				}
+				const w = pick(newState);
+				// Prefer switching away from the failed model; if re-pick
+				// returns the failed model, fall through to the other primary
+				// or DeepSeek to avoid infinite retry loops on unknown errors.
+				if (fp === GLM.provider && w === "glm") newState.glmRlAt ??= Date.now() + 10 * 60 * 1000;
+				if (fp === QWEN.provider && w === "qwen") newState.qwenRlAt ??= Date.now() + 10 * 60 * 1000;
+				const w2 = pick(newState);
+				newState.active = w2;
+				return { model: model(ctx, w2), state: newState };
+			}
+
+			// Direct (compaction summaries, etc.): pick fresh
+			const w = pick(s);
+			return { model: model(ctx, w), state: { ...s, active: w } };
+		},
+	});
+}
