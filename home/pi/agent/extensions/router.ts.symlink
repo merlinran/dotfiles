@@ -146,8 +146,10 @@ export default function (pi: ExtensionAPI) {
 		id: "auto",
 		name: "GLM 09–18 SGT / Qwen (DS only if both limited)",
 		thinkingLevels: ["low", "medium", "high", "xhigh"],
-		contextWindow: 1_048_576,
-		maxTokens: 384_000,
+		// Floor of the routed candidates: GLM/Qwen/DeepSeek are all 1M context,
+		// Qwen3.8 + GLM-5.3 cap output at 131,072 (DeepSeek allows 384,000).
+		contextWindow: 1_000_000,
+		maxTokens: 131_072,
 
 		route(r: ModelRouteRequest<State>, ctx: ExtensionContext): ModelRoute {
 			const s = r.state ?? {};

@@ -16,8 +16,8 @@
           "name": "Qwen3.8 Flash",
           "input": ["text"],
           "reasoning": true,
-          "contextWindow": 131072,
-          "maxTokens": 8192,
+          "contextWindow": 1000000,
+          "maxTokens": 131072,
           "cost": {
             "input": 0,
             "output": 0,
@@ -30,8 +30,8 @@
           "name": "Qwen3.8 Max",
           "input": ["text"],
           "reasoning": true,
-          "contextWindow": 131072,
-          "maxTokens": 8192,
+          "contextWindow": 1000000,
+          "maxTokens": 131072,
           "cost": {
             "input": 0,
             "output": 0,

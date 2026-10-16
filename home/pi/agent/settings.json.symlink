@@ -29,6 +29,13 @@
       "timeoutMs": 1800000
     }
   },
+  "compaction": {
+    "modelOverrides": {
+      "router/auto": {
+        "reserveTokens": 65536
+      }
+    }
+  },
   "httpIdleTimeoutMs": 0,
   "terminal": {
     "showTerminalProgress": true
