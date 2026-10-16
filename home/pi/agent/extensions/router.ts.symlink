@@ -37,6 +37,8 @@ interface State {
 	glmRlAt?: number;
 	/** Earliest time (ms) to retry Qwen after rate-limit. */
 	qwenRlAt?: number;
+	/** Consecutive transient (non-rate-limit) errors on the active primary */
+	strikes?: number;
 }
 
 /**
@@ -47,6 +49,9 @@ function glmWindow(): boolean {
 	const d = new Date();
 	return d.getUTCHours() >= 1 && d.getUTCHours() < 10;
 }
+
+const STRIKE_LIMIT = 5;          // consecutive transient errors before switching
+const STRIKE_COOLDOWN = 5 * 60 * 1000; // cooldown on the flaky provider
 
 function find(ctx: ExtensionContext, p: "zai" | "qwen-pro" | "deepseek", id: string) {
 	const m = ctx.modelRegistry.find(p, id);
@@ -154,6 +159,8 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			if (r.reason === "continuation" && r.previous) {
+				// Previous call succeeded → clear transient-error strikes
+				const s = { ...r.state, strikes: 0 } as State;
 				// Compaction: re-evaluate from scratch
 				if (compacted(r.messages, s)) {
 					const w = pick(s);
@@ -178,6 +185,20 @@ export default function (pi: ExtensionAPI) {
 					if (fp === GLM.provider) newState.glmRlAt = rlAt;
 					else if (fp === QWEN.provider) newState.qwenRlAt = rlAt;
 					else return { model: find(ctx, DS.provider, DS.id), state: newState }; // DS rate-limited too: just retry DS
+					newState.strikes = 0;
+				} else if (fp === GLM.provider || fp === QWEN.provider) {
+					// Transient error on a primary (connection error, timeout, abort):
+					// count strikes; after STRIKE_LIMIT consecutive ones, put the
+					// flaky provider on a short cooldown so pick() switches to the
+					// other primary (e.g. qwen issues -> glm).
+					const strikes = (s.strikes ?? 0) + 1;
+					newState.strikes = strikes;
+					if (strikes >= STRIKE_LIMIT) {
+						const until = Date.now() + STRIKE_COOLDOWN;
+						if (fp === GLM.provider) newState.glmRlAt = until;
+						else newState.qwenRlAt = until;
+						newState.strikes = 0;
+					}
 				}
 				const w = pick(newState);
 				// Prefer switching away from the failed model; if re-pick
