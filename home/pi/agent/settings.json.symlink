@@ -14,8 +14,8 @@
   "defaultModel": "llama-local/qwen3.6-35b-a3b",
   "enabledModels": [
     "llama-local/qwen3.6-35b-a3b",
-    "qwen-pro/qwen3.8-max",
     "qwen-pro/qwen3.8-flash",
+    "qwen-pro/qwen3.8-max",
     "qwen-pro/deepseek-v4.1-flash",
     "deepseek/deepseek-flash",
     "zai/glm-5.3",
@@ -32,7 +32,7 @@
   "compaction": {
     "modelOverrides": {
       "router/auto": {
-        "reserveTokens": 65536
+        "reserveTokens": 820000
       }
     }
   },
