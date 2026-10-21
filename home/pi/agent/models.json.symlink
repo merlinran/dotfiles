@@ -40,8 +40,8 @@
           }
         },
         {
-          "id": "deepseek-v4.1-flash",
-          "name": "DeepSeek V4.1 Flash",
+          "id": "deepseek-v4.1-flash-1017",
+          "name": "DeepSeek V4.1 Flash 1017",
           "input": ["text"],
           "reasoning": true,
           "contextWindow": 1000000,

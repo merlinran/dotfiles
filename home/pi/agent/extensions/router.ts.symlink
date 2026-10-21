@@ -42,7 +42,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 
 const GLM  = { provider: "zai" as const, id: "glm-5.3-flash" as const };
-const QWEN = { provider: "qwen-pro" as const, id: "deepseek-v4.1-flash" as const };
+const QWEN = { provider: "qwen-pro" as const, id: "deepseek-v4.1-flash-1017" as const };
 const DS   = { provider: "deepseek" as const, id: "deepseek-flash" as const };
 
 type Which = "glm" | "qwen" | "ds";
