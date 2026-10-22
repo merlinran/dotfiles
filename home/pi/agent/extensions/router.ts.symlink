@@ -1,17 +1,19 @@
 /**
  * GLM / Qwen smart router (DeepSeek last-resort)
  *
- * Primary: GLM during 01:00–10:00 UTC (09:00–18:00 SGT);
- * Qwen3.8 Flash at all other times.
+ * Preferred primary by time of day: GLM during 00:00–14:00 UTC
+ * (08:00–22:00 UTC+8); Qwen Pro (deepseek-v4.1-flash) at all other times.
  *
- * Sessions are sharded: each session deterministically prefers one
- * primary (hash of the session id), so a multi-agent fleet spreads
- * across both models instead of stacking on one account+model TPM
- * bucket. Shard 0 follows the time window; shard 1 prefers the other
- * primary. Cooldowns still override the shard.
+ * The time window shapes placement only where the prompt cache is
+ * cold anyway: session start, compaction, and post-failover re-picks.
+ * A running session stays on its warm model (sticky) until one of
+ * those boundaries or a rate-limit, because switching mid-session at
+ * a window edge would discard hundreds of K tokens of provider cache
+ * per session. Fleet load converges to the window as sessions restart.
  *
- * On a rate-limit of the active model, fail over to the other primary.
- * DeepSeek is used only when both primaries are limited.
+ * On a rate-limit (or transient-error cooldown) of the active model,
+ * fail over to the other primary. DeepSeek is used only when both
+ * primaries are limited.
  *
  * Rate-limit handling matches the provider's actual behaviour
  * (Model Studio docs): TPM/RPM limits ("Allocated quota exceeded",
@@ -53,8 +55,6 @@ interface State {
 	active?: Which;
 	/** Message count for compaction detection */
 	msgs?: number;
-	/** This session's preferred primary (0 = time window, 1 = the other) */
-	shard?: 0 | 1;
 	/** Earliest time (ms) to retry GLM after rate-limit. */
 	glmRlAt?: number;
 	/** Earliest time (ms) to retry Qwen after rate-limit. */
@@ -132,18 +132,24 @@ function maxOf(a: number | undefined, b: number | undefined): number | undefined
 // ---------------------------------------------------------------------------
 
 /**
- * 01:00–10:00 UTC = 09:00–18:00 SGT, all days.
- * Only time DeepSeek is peak while GLM is off-peak.
+ * 00:00–14:00 UTC = 08:00–22:00 UTC+8, all days.
+ * GLM is the preferred primary during this window.
  */
 function glmWindow(): boolean {
 	const d = new Date();
-	return d.getUTCHours() >= 1 && d.getUTCHours() < 10;
+	return d.getUTCHours() >= 0 && d.getUTCHours() < 14;
 }
 
 // Rolling transient-error window
 const TRANSIENT_WINDOW_MS = 90_000;   // count errors within this window
 const TRANSIENT_LIMIT = 3;            // …before a short cooldown
 const TRANSIENT_COOLDOWN_MS = 3 * 60_000;
+
+// Switching primaries at a window edge discards the provider prompt
+// cache. When the cached prompt is below this many tokens the switch
+// is nearly free, so short/fresh sessions re-converge to the window
+// immediately; larger caches stay sticky until compaction/failover.
+const CACHE_SWITCH_THRESHOLD = 64_000;
 
 // TPM/RPM cooldowns: docs say limits recover "usually within one minute".
 const TPM_COOLDOWN_MS = 90_000;
@@ -263,32 +269,111 @@ function usable(s: State, w: Primary, now: number): boolean {
 }
 
 /**
- * Stable per-session shard so a fleet spreads across both primaries
- * (provider limits are per account+model: stacking every session on
- * one model exhausts that model's TPM while the other sits idle).
+ * Pick the model: the preferred primary for the current time window,
+ * falling back to the other primary when it is cooling down, then
+ * DeepSeek when both are limited.
  */
-function shardFor(ctx: ExtensionContext): 0 | 1 {
-	try {
-		const id = ctx.sessionManager.getSessionId() ?? "";
-		let h = 0;
-		for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
-		return (h & 1) as 0 | 1;
-	} catch {
-		return Math.random() < 0.5 ? 0 : 1;
-	}
-}
-
-/**
- * Pick the model. Each session prefers its sharded primary, falling
- * back to the other primary, then DeepSeek when both are limited.
- */
-function pick(s: State, shard: 0 | 1, now: number): Which {
-	const windowPrimary: Primary = glmWindow() ? "glm" : "qwen";
-	const first: Primary = shard === 0 ? windowPrimary : windowPrimary === "glm" ? "qwen" : "glm";
+function pick(s: State, now: number): Which {
+	const first: Primary = glmWindow() ? "glm" : "qwen";
 	const second: Primary = first === "glm" ? "qwen" : "glm";
 	if (usable(s, first, now)) return first;
 	if (usable(s, second, now)) return second;
 	return "ds";
+}
+
+/**
+ * Sticky pick for user messages in a running session: keep the warm
+ * model unless it is rate-limited (or on DeepSeek with a primary
+ * recovered). Switching at a window edge would discard the provider
+ * prompt cache; the window still applies at session start, compaction,
+ * and failover, where the cache is cold anyway.
+ *
+ * Exception: when the warm model is off-window AND its cached prompt
+ * is below CACHE_SWITCH_THRESHOLD tokens, switching is nearly free —
+ * so short/fresh sessions converge to the window immediately instead
+ * of being locked in for their whole life. Long sessions stay sticky
+ * until compaction (which resets the cache anyway).
+ */
+function pickSticky(s: State, now: number, cacheRead?: number): Which {
+	const prev = s.active;
+	if (prev === "glm" || prev === "qwen") {
+		if (usable(s, prev, now)) {
+			const onWindow = (glmWindow() && prev === "glm") || (!glmWindow() && prev === "qwen");
+			if (!onWindow && cacheRead !== undefined && cacheRead < CACHE_SWITCH_THRESHOLD) {
+				return pick(s, now);
+			}
+			return prev;
+		}
+		// Warm model limited → the other primary (window decides if both free).
+		const other: Primary = prev === "glm" ? "qwen" : "glm";
+		if (usable(s, other, now)) return other;
+		return "ds";
+	}
+	return pick(s, now);
+}
+
+function model(ctx: ExtensionContext, w: Which) {
+	return find(ctx, w === "glm" ? GLM.provider : w === "qwen" ? QWEN.provider : DS.provider,
+		w === "glm" ? GLM.id : w === "qwen" ? QWEN.id : DS.id);
+}
+
+/** Map a physical provider/model pair back to a router slot. */
+function whichOfModel(provider: string, id: string): Which | undefined {
+	if (provider === GLM.provider && id === GLM.id) return "glm";
+	if (provider === QWEN.provider && id === QWEN.id) return "qwen";
+	if (provider === DS.provider && id === DS.id) return "ds";
+	return undefined;
+}
+
+/**
+ * Total prompt size (tokens) of the most recent SUCCESSFUL response
+ * from the active model: input + cacheWrite (freshly warmed) +
+ * cacheRead (hits). Cache hits alone are NOT the cache size — a 200K
+ * request with zero hits still leaves a large warm cache behind, so
+ * the full prompt must count.
+ *
+ * Failed/aborted responses (missing or zero usage) are skipped, so a
+ * zero-usage error after a large success cannot make the session look
+ * small. Messages from other providers are skipped too: their usage
+ * says nothing about the active model's cache.
+ */
+function lastPromptTokens(msgs: readonly Message[], active?: Which): number | undefined {
+	for (let i = msgs.length - 1; i >= 0; i--) {
+		const m = msgs[i] as {
+			role?: string; provider?: string; model?: string;
+			stopReason?: string; errorMessage?: string;
+			usage?: { input?: number; cacheRead?: number; cacheWrite?: number; totalTokens?: number };
+		} | undefined;
+		if (!m || m.role !== "assistant" || !m.usage) continue;
+		if (m.errorMessage || m.stopReason === "aborted" || m.stopReason === "error") continue;
+		if ((m.usage.totalTokens ?? 0) <= 0) continue;
+		if (active) {
+			const w = m.provider && m.model ? whichOfModel(m.provider, m.model) : undefined;
+			if (w !== active) continue;
+		}
+		const { input = 0, cacheRead = 0, cacheWrite = 0 } = m.usage;
+		return input + cacheRead + cacheWrite;
+	}
+	return undefined;
+}
+
+/**
+ * The routed slot of the latest successful response in the message
+ * history. Direct requests (compaction summaries) carry no router
+ * state, so the active model must be recovered from the transcript.
+ */
+function lastSuccessfulWhich(msgs: readonly Message[]): Which | undefined {
+	for (let i = msgs.length - 1; i >= 0; i--) {
+		const m = msgs[i] as {
+			role?: string; provider?: string; model?: string;
+			stopReason?: string; errorMessage?: string;
+			usage?: { totalTokens?: number };
+		} | undefined;
+		if (!m || m.role !== "assistant" || !m.usage || (m.usage.totalTokens ?? 0) <= 0) continue;
+		if (m.errorMessage || m.stopReason === "aborted" || m.stopReason === "error") continue;
+		if (m.provider && m.model) return whichOfModel(m.provider, m.model);
+	}
+	return undefined;
 }
 
 function find(ctx: ExtensionContext, p: "zai" | "qwen-pro" | "deepseek", id: string) {
@@ -297,18 +382,13 @@ function find(ctx: ExtensionContext, p: "zai" | "qwen-pro" | "deepseek", id: str
 	return m;
 }
 
-function model(ctx: ExtensionContext, w: Which) {
-	return find(ctx, w === "glm" ? GLM.provider : w === "qwen" ? QWEN.provider : DS.provider,
-		w === "glm" ? GLM.id : w === "qwen" ? QWEN.id : DS.id);
-}
-
 export default function (pi: ExtensionAPI) {
 	// Register under a custom provider ID that is always available
 	// (not tied to a real provider with credentials).
 	pi.registerVirtualModel<State>({
 		provider: "router",
 		id: "auto",
-		name: "GLM / Qwen3.8 sharded router (DS only if both limited)",
+		name: "GLM / Qwen Pro time-windowed router (DS only if both limited)",
 		thinkingLevels: ["low", "medium", "high", "xhigh"],
 		// Floor of the routed candidates: GLM/Qwen/DeepSeek are all 1M context,
 		// Qwen3.8 + GLM-5.3 cap output at 131,072 (DeepSeek allows 384,000).
@@ -317,12 +397,19 @@ export default function (pi: ExtensionAPI) {
 
 		route(r: ModelRouteRequest<State>, ctx: ExtensionContext): ModelRoute {
 			const now = Date.now();
-			const shard = (r.state?.shard as 0 | 1 | undefined) ?? shardFor(ctx);
 
-			// User message: pick fresh (shard + active cooldowns)
+			// User message: check compaction FIRST (a compacted session has
+			// no warm cache left → re-select by the window), then stay
+			// sticky while the warm model is healthy.
 			if (r.reason === "user") {
-				const w = pick(r.state ?? {}, shard, now);
-				return { model: model(ctx, w), state: { ...r.state, shard, active: w, msgs: r.messages.length } };
+				const s = r.state ?? {};
+				const wasCompacted = compacted(r.messages, s);
+				if (wasCompacted || !s.active) {
+					const w = pick(s, now);
+					return { model: model(ctx, w), state: { ...s, active: w, msgs: r.messages.length } };
+				}
+				const w = pickSticky(s, now, lastPromptTokens(r.messages, s.active));
+				return { model: model(ctx, w), state: { ...s, active: w, msgs: r.messages.length } };
 			}
 
 			if (r.reason === "continuation" && r.previous) {
@@ -330,26 +417,35 @@ export default function (pi: ExtensionAPI) {
 				// TRANSIENT_WINDOW_MS) so interleaved successes cannot hide a
 				// provider that is flapping.
 				const s: State = { ...r.state } as State;
+				const prevW = whichOfModel(r.previous.model.provider, r.previous.model.id);
+				if (prevW) s.active = prevW;
 				// Compaction: re-evaluate from scratch
 				if (compacted(r.messages, s)) {
-					const w = pick(s, shard, now);
-					return { model: model(ctx, w), state: { ...s, shard, active: w, msgs: r.messages.length } };
+					const w = pick(s, now);
+					return { model: model(ctx, w), state: { ...s, active: w, msgs: r.messages.length } };
+				}
+				// Fleet cooldowns apply mid-turn too: if the physical model this
+				// continuation was using has been rate-limited by any session
+				// (shared limits file), fail over instead of hammering it.
+				if (prevW && !usable(s, prevW === "ds" ? "glm" : prevW, now)) {
+					const w = pickSticky(s, now);
+					return { model: model(ctx, w), state: { ...s, active: w, msgs: r.messages.length } };
 				}
 				// On DeepSeek (double-limit fallback) and a primary usable again → switch back.
 				if (s.active === "ds") {
-					const w = pick(s, shard, now);
+					const w = pick(s, now);
 					if (w !== "ds") {
-						return { model: model(ctx, w), state: { ...s, shard, active: w, msgs: r.messages.length } };
+						return { model: model(ctx, w), state: { ...s, active: w, msgs: r.messages.length } };
 					}
 				}
-				return { model: r.previous.model, state: { ...s, shard, msgs: r.messages.length } };
+				return { model: r.previous.model, state: { ...s, msgs: r.messages.length } };
 			}
 
 			// Retry: record cooldowns; re-pick.
 			if (r.reason === "retry" && r.failed) {
 				const fp = r.failed.model.provider;
 				const errMsg = r.failed.message.errorMessage;
-				let newState: State = { ...r.state, shard, msgs: r.messages.length };
+				let newState: State = { ...r.state, msgs: r.messages.length };
 				const failedPrimary: Primary | undefined =
 					fp === GLM.provider ? "glm" : fp === QWEN.provider ? "qwen" : undefined;
 
@@ -376,26 +472,26 @@ export default function (pi: ExtensionAPI) {
 					}
 				}
 
-				let w = pick(newState, shard, now);
-				// Prefer switching away from the failed model; if re-pick returns
-				// the failed model anyway, force a short cooldown so the retry does
-				// not loop on the same endpoint (DeepSeek is the last resort).
-				if (failedPrimary && w === failedPrimary) {
-					const until = now + TPM_COOLDOWN_MS;
-					newState = failedPrimary === "glm"
-						? { ...newState, glmRlAt: maxOf(newState.glmRlAt, until)! }
-						: { ...newState, qwenRlAt: maxOf(newState.qwenRlAt, until)! };
-					w = pick(newState, shard, now);
-				}
+				// Sticky keeps a warm cache across transient blips: 1–2 strikes
+				// retry the same (otherwise healthy) endpoint; 3 strikes within
+				// TRANSIENT_WINDOW_MS trigger a cooldown above and fail over.
+				// Rate-limited models already carry a cooldown, so pickSticky
+				// cannot return them here.
+				let w = pickSticky(newState, now);
 				newState.active = w;
 				return { model: model(ctx, w), state: newState };
 			}
 
-			// Direct (compaction summaries, etc.): pick with shared cooldowns and
-			// the session shard — summaries are the largest requests of all, so
-			// they must respect the fleet's rate-limit state too.
-			const w = pick(r.state ?? { shard }, shard, now);
-			return { model: model(ctx, w), state: { ...(r.state ?? {}), shard, active: w } };
+			// Direct (compaction summaries, etc.): the summary request runs
+			// against the full conversation BEFORE compaction discards it, so
+			// it can still hit the active provider's warm cache. Direct
+			// requests carry no router state, so recover the active slot from
+			// r.previous or the latest successful response in the transcript.
+			const directActive = r.state?.active
+				?? (r.previous ? whichOfModel(r.previous.model.provider, r.previous.model.id) : undefined)
+				?? lastSuccessfulWhich(r.messages);
+			const w = pickSticky({ ...(r.state ?? {}), active: directActive }, now);
+			return { model: model(ctx, w), state: { ...(r.state ?? {}), active: w } };
 		},
 	});
 }
