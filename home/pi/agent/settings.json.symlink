@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "1.0.1",
+  "lastChangelogVersion": "1.5.0",
   "theme": "dark",
   "extensions": [
     "-builtin:llama.cpp"
@@ -39,5 +39,10 @@
   "httpIdleTimeoutMs": 0,
   "terminal": {
     "showTerminalProgress": true
+  },
+  "extensionChangelogVersions": {
+    "{\"source\":\"git:github.com/merlinran/pi-superagents\",\"scope\":\"user\"}": "1.14.1",
+    "{\"source\":\"npm:@hk_net/pi-timestamp\",\"scope\":\"user\"}": "0.1.13",
+    "{\"source\":\"npm:pi-web-access\",\"scope\":\"user\"}": "0.39.0"
   }
 }
