@@ -53,6 +53,11 @@ $ZSH/macos/set-hostname.sh
 # Install homebrew
 $ZSH/homebrew/install.sh 2>&1
 
+# A brew that was installed just now is not on this shell's PATH yet: homebrew
+# lives in /opt/homebrew on Apple Silicon and /usr/local on Intel.
+PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+export PATH
+
 # Upgrade homebrew
 echo "› brew update"
 brew update
