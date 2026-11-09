@@ -40,9 +40,22 @@ done
 
 export ZSH=$HOME/.dotfiles
 
-# Update dotfiles themselves
-echo "› git pull"
-git -C $ZSH pull || true
+# Update dotfiles themselves. Skipped when script/bootstrap already did it --
+# pulling here would rewrite that still-running script mid-execution. Bare
+# `git pull` is refused anyway because gitconfig sets pull.rebase=true whenever
+# the tree is dirty, and the old `git pull || true` hid that behind a cheerful
+# "git pull" line.
+if [ -z "${DOTFILES_SELF_UPDATED:-}" ]
+then
+	echo "› git pull"
+	if ! git -C "$ZSH" fetch --quiet
+	then
+		echo "  git fetch failed (offline, or no remote); continuing"
+	elif ! git -C "$ZSH" merge --ff-only '@{u}' >/dev/null 2>&1
+	then
+		echo "  could not fast-forward (local changes or diverged history); run 'git pull' in $ZSH"
+	fi
+fi
 
 # Set macOS defaults
 $ZSH/macos/set-defaults.sh

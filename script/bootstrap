@@ -27,6 +27,63 @@ fail () {
   exit
 }
 
+# Update the dotfiles before anything else runs, and restart if HEAD moved.
+#
+# Two traps this replaces:
+#   1. bin/dot used to be the only place that pulled, and bootstrap sources it
+#      half way through -- by then bash has already parsed this file's
+#      functions, so the run that fetches a fix keeps executing the pre-fix
+#      code (always one run too late). Rewriting a script that a live bash is
+#      still reading also shifts its byte offsets, so re-exec instead of
+#      carrying on with a half-read file.
+#   2. `git pull` is unusable here: the gitconfig sets pull.rebase=true, which
+#      aborts with "cannot pull with rebase: You have unstaged changes" -- and
+#      the old `git pull || true` hid that while still printing "git pull".
+#      Fetch, then fast-forward explicitly.
+update_dotfiles () {
+  local before upstream after
+
+  before=$(git -C "$DOTFILES_ROOT" rev-parse HEAD 2>/dev/null) || return 0
+
+  info 'updating dotfiles'
+  if ! git -C "$DOTFILES_ROOT" fetch --quiet
+  then
+    info 'git fetch failed (offline, or no remote); continuing with the local copy'
+    return 0
+  fi
+
+  upstream=$(git -C "$DOTFILES_ROOT" rev-parse '@{u}' 2>/dev/null)
+  if [ -z "$upstream" ]
+  then
+    info 'no upstream branch configured; skipping update'
+    return 0
+  fi
+
+  # Fast-forward only -- a merge or rebase here could rewrite history mid-run.
+  if ! git -C "$DOTFILES_ROOT" merge --ff-only '@{u}'
+  then
+    info 'update available but cannot be fast-forwarded (local changes in the way, or diverged history); continuing with the local copy -- run git pull manually'
+    return 0
+  fi
+
+  after=$(git -C "$DOTFILES_ROOT" rev-parse HEAD)
+  export DOTFILES_SELF_UPDATED=1
+
+  # Re-exec only when HEAD really moved: a local branch that is ahead of the
+  # upstream also shows before != upstream, and merging it is a no-op.
+  if [ "$before" != "$after" ] && [ -z "${DOTFILES_BOOTSTRAP_REEXEC:-}" ]
+  then
+    success 'dotfiles updated, restarting bootstrap with the new code'
+    export DOTFILES_BOOTSTRAP_REEXEC=1
+    exec "$0" "$@"
+  fi
+
+  if [ "$before" = "$after" ]
+  then
+    info 'already up to date'
+  fi
+}
+
 setup_gitconfig () {
   if ! [ -f home/gitconfig.local.symlink ]
   then
@@ -156,6 +213,7 @@ install_dotfiles () {
   done
 }
 
+update_dotfiles "$@"
 setup_gitconfig
 install_dotfiles
 
