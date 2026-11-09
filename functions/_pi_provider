@@ -34,13 +34,13 @@ case "$prefix" in
     ;;
   PIG)
     provider="zai"
-    model="glm-5.3"
+    model="glm-5.3-flash"
     env_var="ZAI_API_KEY"
     api_key=$(grep '^CCG_ANTHROPIC_AUTH_TOKEN=' "$config_file" | cut -d'=' -f2-)
     ;;
   PIQ)
     provider="qwen-pro"
-    model="qwen3.8-max"
+    model="qwen3.8-flash"
     env_var="QWEN_API_KEY"
     api_key=$(grep '^CCQ_ANTHROPIC_AUTH_TOKEN=' "$config_file" | cut -d'=' -f2-)
     ;;
