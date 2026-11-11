@@ -188,7 +188,10 @@ function isPlanExhausted(err: string | undefined): boolean {
 	return l.includes("arrears") || l.includes("欠费") || l.includes("欠款")
 		|| l.includes("free quota") || l.includes("免费额度")
 		|| l.includes("billing") || l.includes("payment required")
-		|| l.includes("403");
+		|| l.includes("403")
+		// Aliyun token-plan exhaustion ("insufficient_quota", e.g. "Your
+		// token-plan 1-month quota has been exhausted").
+		|| l.includes("insufficient_quota") || l.includes("token-plan");
 }
 
 /**
@@ -203,6 +206,15 @@ function parseRetryAfter(err: string | undefined, now: number): number | undefin
 	if (secs) {
 		const t = now + parseInt(secs[1]!, 10) * 1000;
 		if (t > now && t - now < 8 * 24 * 3600 * 1000) return t;
+	}
+	// Aliyun token-plan reset: "reset at 11-15 16:00:00 UTC" (MM-DD, no
+	// year — assume current UTC year; if that lands in the past, use next).
+	const aliyun = err?.match(/\b(\d{2})-(\d{2})\s+(\d{2}:\d{2}:\d{2})\s*UTC/i);
+	if (aliyun) {
+		const year = new Date().getUTCFullYear();
+		let t = Date.parse(`${year}-${aliyun[1]}-${aliyun[2]}T${aliyun[3]}Z`);
+		if (!isNaN(t) && t <= now) t = Date.parse(`${year + 1}-${aliyun[1]}-${aliyun[2]}T${aliyun[3]}Z`);
+		if (!isNaN(t) && t > now && t - now < 60 * 24 * 3600 * 1000) return t;
 	}
 	// Datetime: YYYY-MM-DD HH:MM:SS (space-separated, Zai local time, UTC+8)
 	const match = err?.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})/);
@@ -235,6 +247,36 @@ function rateLimitCooldownMs(err: string | undefined, now: number): number {
 /** >50% message count drop = compaction */
 function compacted(msgs: readonly Message[], s: State): boolean {
 	return (s.msgs !== undefined && s.msgs >= 5 && msgs.length < s.msgs * 0.5);
+}
+
+/**
+ * Absorb provider failures directly from the transcript. Some hosts
+ * (Raft runtimes) never drive pi's retry flow, so the retry branch's
+ * cooldown recording never runs — each failed turn just becomes a
+ * terminal assistant error message and the host injects a fresh
+ * "user" turn. Scanning recent messages for those errors keeps the
+ * cooldown machinery working regardless of which route reason runs.
+ */
+function absorbTranscriptErrors(s: State, msgs: readonly Message[], now: number): State {
+	let st: State = s;
+	for (const m of msgs.slice(-8)) {
+		const a = m as {
+			role?: string; provider?: string; model?: string;
+			stopReason?: string; errorMessage?: string;
+		};
+		if (!a || a.role !== "assistant" || !a.errorMessage) continue;
+		if (a.stopReason !== "error" && a.stopReason !== "aborted") continue;
+		const w = a.provider && a.model ? whichOfModel(a.provider, a.model) : undefined;
+		if (w !== "glm" && w !== "qwen") continue;
+		const already = st[w === "glm" ? "glmRlAt" : "qwenRlAt"];
+		if (already !== undefined && already > now - PLAN_COOLDOWN_MS) continue;
+		if (isRateLimit(a.errorMessage)) {
+			const until = now + rateLimitCooldownMs(a.errorMessage, now);
+			st = w === "glm" ? { ...st, glmRlAt: until, glmErrAt: [] } : { ...st, qwenRlAt: until, qwenErrAt: [] };
+			writeShared({ [w]: until });
+		}
+	}
+	return st;
 }
 
 // ---------------------------------------------------------------------------
@@ -402,7 +444,7 @@ export default function (pi: ExtensionAPI) {
 			// no warm cache left → re-select by the window), then stay
 			// sticky while the warm model is healthy.
 			if (r.reason === "user") {
-				const s = r.state ?? {};
+				const s = absorbTranscriptErrors(r.state ?? {}, r.messages, now);
 				const wasCompacted = compacted(r.messages, s);
 				if (wasCompacted || !s.active) {
 					const w = pick(s, now);
